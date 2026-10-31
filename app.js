@@ -10,6 +10,8 @@ let STATE = {
     pagos: [],
     inventario: [],
     resumen: [],
+    gradings: [],
+    rips: [],
 };
 
 const formatCurrency = (val) =>
@@ -23,7 +25,7 @@ function socioNombre(id) {
 
 // ---------- Carga de datos ----------
 async function loadAll() {
-    const [socios, productos, compras, ventas, pagos, inventario, resumen] = await Promise.all([
+    const [socios, productos, compras, ventas, pagos, inventario, resumen, gradings, rips] = await Promise.all([
         sb.from('socios').select('*').order('nombre'),
         sb.from('productos').select('*').order('nombre'),
         sb.from('compras').select('*, compra_socios(socio_id, porcentaje)').order('fecha', { ascending: false }),
@@ -31,8 +33,10 @@ async function loadAll() {
         sb.from('pagos').select('*').order('fecha', { ascending: false }),
         sb.from('inventario_actual').select('*').order('valor_disponible', { ascending: false }),
         sb.from('resumen_por_socio').select('*').order('socio'),
+        sb.from('gradings').select('*').order('fecha_envio', { ascending: false }),
+        sb.from('rips').select('*, rip_pulls(*)').order('fecha', { ascending: false }),
     ]);
-    for (const r of [socios, productos, compras, ventas, pagos, inventario, resumen]) {
+    for (const r of [socios, productos, compras, ventas, pagos, inventario, resumen, gradings, rips]) {
         if (r.error) console.error(r.error);
     }
     STATE.socios = socios.data || [];
@@ -42,6 +46,8 @@ async function loadAll() {
     STATE.pagos = pagos.data || [];
     STATE.inventario = inventario.data || [];
     STATE.resumen = resumen.data || [];
+    STATE.gradings = gradings.data || [];
+    STATE.rips = rips.data || [];
 }
 
 function productoNombre(id) {
@@ -68,6 +74,8 @@ const NAVS = [
     { btn: 'navReservas', view: 'reservasView' },
     { btn: 'navVentas', view: 'ventasView' },
     { btn: 'navInventario', view: 'inventarioView' },
+    { btn: 'navGraded', view: 'gradedView' },
+    { btn: 'navRips', view: 'ripsView' },
     { btn: 'navPagos', view: 'pagosView' },
     { btn: 'navSocios', view: 'sociosView' },
 ];
@@ -536,6 +544,270 @@ function renderResumen() {
     }
 }
 
+// ---------- Envios a gradear ----------
+function compraLabel(c) {
+    return `${productoNombre(c.producto_id)} — ${c.fecha || 's/f'} — ${formatCurrency(c.precio_unitario)}`;
+}
+
+function fillCompraOrigenSelect(selectId, tipo) {
+    const sel = document.getElementById(selectId);
+    const candidatas = STATE.compras.filter(c => c.estado === 'recibido' && c.tipo === tipo);
+    sel.innerHTML = candidatas.map(c => `<option value="${c.id}">${compraLabel(c)}</option>`).join('');
+}
+
+async function copiarRepartoSocios(origenCompraId, nuevaCompraId) {
+    const origen = STATE.compras.find(c => c.id === origenCompraId);
+    const rows = (origen?.compra_socios || []).map(s => ({
+        compra_id: nuevaCompraId, socio_id: s.socio_id, porcentaje: s.porcentaje,
+    }));
+    if (rows.length) await sb.from('compra_socios').insert(rows);
+}
+
+document.getElementById('addGradingBtn').addEventListener('click', () => {
+    document.getElementById('gradingForm').reset();
+    document.getElementById('gradingFechaInput').value = todayStr();
+    fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW');
+    openModal('gradingModal');
+});
+
+document.getElementById('gradingForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const vals = {
+        compra_origen_id: parseInt(document.getElementById('gradingCompraOrigenInput').value, 10),
+        grading_company: document.getElementById('gradingEmpresaInput').value,
+        coste_grading: parseFloat(document.getElementById('gradingCosteInput').value),
+        fecha_envio: document.getElementById('gradingFechaInput').value,
+        estado: 'enviado',
+        comentarios: document.getElementById('gradingComentariosInput').value || null,
+    };
+    const { error } = await sb.from('gradings').insert(vals);
+    if (error) { alert('Error: ' + error.message); return; }
+    closeModal('gradingModal');
+    await loadAll();
+    renderAll();
+});
+
+function renderGraded() {
+    const tbody = document.getElementById('gradedTableBody');
+    tbody.innerHTML = '';
+    STATE.gradings.forEach(g => {
+        const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${g.referencia}</td>
+            <td>${origen ? productoNombre(origen.producto_id) : '-'}</td>
+            <td>${g.grading_company}</td>
+            <td class="text-right">${formatCurrency(g.coste_grading)}</td>
+            <td>${g.fecha_envio || '-'}</td>
+            <td>${g.estado === 'recibido'
+                ? '<span class="pl-badge positive">Recibido</span>'
+                : '<span class="pl-badge negative">Enviado</span>'}</td>
+            <td class="text-right">${g.grado ?? '-'}</td>
+            <td>${g.fecha_recibido || '-'}</td>
+            <td>
+                ${g.estado === 'enviado'
+                    ? `<button class="icon-btn mark-grading-recibido" data-id="${g.id}" title="Marcar recibido"><span class="material-symbols-outlined" style="font-size:16px;">inventory_2</span></button>`
+                    : ''}
+                <button class="icon-btn delete-grading" data-id="${g.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.mark-grading-recibido').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('gradingRecibidoForm').reset();
+            document.getElementById('gradingRecibidoIdInput').value = btn.dataset.id;
+            document.getElementById('gradingFechaRecibidoInput').value = todayStr();
+            openModal('gradingRecibidoModal');
+        });
+    });
+    tbody.querySelectorAll('.delete-grading').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar este envío a gradear?')) return;
+            const { error } = await sb.from('gradings').delete().eq('id', btn.dataset.id);
+            if (error) { alert('Error: ' + error.message); return; }
+            await loadAll();
+            renderAll();
+        });
+    });
+}
+
+document.getElementById('gradingRecibidoForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const gradingId = parseInt(document.getElementById('gradingRecibidoIdInput').value, 10);
+    const grading = STATE.gradings.find(g => g.id === gradingId);
+    const origen = STATE.compras.find(c => c.id === grading.compra_origen_id);
+    if (!grading || !origen) return;
+
+    const grado = parseFloat(document.getElementById('gradingGradoInput').value);
+    const fechaRecibido = document.getElementById('gradingFechaRecibidoInput').value;
+
+    // 1. Resta 1 unidad de la compra RAW original (ese ejemplar pasa a ser la carta gradeada)
+    const { error: errUpd } = await sb.from('compras')
+        .update({ cantidad: origen.cantidad - 1 })
+        .eq('id', origen.id);
+    if (errUpd) { alert('Error actualizando origen: ' + errUpd.message); return; }
+
+    // 2. Crea la nueva compra GRADED con el coste total (original + grading)
+    const { data: nueva, error: errIns } = await sb.from('compras').insert({
+        producto_id: origen.producto_id,
+        cantidad: 1,
+        precio_unitario: origen.precio_unitario + grading.coste_grading,
+        tipo: 'GRADED',
+        grading_company: grading.grading_company,
+        grade: grado,
+        idioma: origen.idioma,
+        fecha: fechaRecibido,
+        estado: 'recibido',
+        comentarios: `Gradeada a partir de ${origen.referencia}`,
+    }).select().single();
+    if (errIns) { alert('Error creando compra gradeada: ' + errIns.message); return; }
+
+    await copiarRepartoSocios(origen.id, nueva.id);
+
+    // 3. Cierra el envio
+    const { error: errG } = await sb.from('gradings').update({
+        estado: 'recibido', grado, fecha_recibido: fechaRecibido, compra_resultante_id: nueva.id,
+    }).eq('id', gradingId);
+    if (errG) { alert('Error: ' + errG.message); return; }
+
+    closeModal('gradingRecibidoModal');
+    await loadAll();
+    renderAll();
+});
+
+// ---------- Rips ----------
+let ripPullsCounter = 0;
+
+function addPullRow(producto = '', categoria = 'Pokémon', cantidad = 1) {
+    const container = document.getElementById('ripPullsRows');
+    const row = document.createElement('div');
+    row.className = 'form-row socio-row';
+    const uid = ripPullsCounter++;
+    row.innerHTML = `
+        <div class="form-group">
+            <input type="text" class="pull-producto" list="productosList" placeholder="Nombre de la carta" value="${producto}" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <select class="pull-categoria">
+                <option value="Pokémon">Pokémon</option>
+                <option value="One Piece">One Piece</option>
+                <option value="Disney Lorcana">Disney Lorcana</option>
+                <option value="Riftbound">Riftbound</option>
+                <option value="Magic: The Gathering">Magic: The Gathering</option>
+                <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+                <option value="Naruto">Naruto</option>
+                <option value="Otros TCG">Otros TCG</option>
+            </select>
+        </div>
+        <div class="form-group" style="flex:0 0 80px;">
+            <input type="number" class="pull-cantidad" min="1" step="1" value="${cantidad}">
+        </div>
+        <button type="button" class="icon-btn remove-socio-row" title="Quitar">
+            <span class="material-symbols-outlined">remove_circle</span>
+        </button>
+    `;
+    row.querySelector('.pull-categoria').value = categoria;
+    const productoInput = row.querySelector('.pull-producto');
+    const categoriaSelect = row.querySelector('.pull-categoria');
+    productoInput.addEventListener('input', () => {
+        const match = STATE.productos.find(
+            p => p.nombre.trim().toLowerCase() === productoInput.value.trim().toLowerCase());
+        if (match) {
+            categoriaSelect.value = match.categoria;
+            categoriaSelect.disabled = true;
+        } else {
+            categoriaSelect.disabled = false;
+        }
+    });
+    row.querySelector('.remove-socio-row').addEventListener('click', () => row.remove());
+    container.appendChild(row);
+}
+
+function getPullRows() {
+    return Array.from(document.querySelectorAll('#ripPullsRows .socio-row')).map(r => ({
+        nombre: r.querySelector('.pull-producto').value.trim(),
+        categoria: r.querySelector('.pull-categoria').value,
+        cantidad: parseFloat(r.querySelector('.pull-cantidad').value) || 1,
+    })).filter(p => p.nombre);
+}
+
+document.getElementById('addRipBtn').addEventListener('click', () => {
+    document.getElementById('ripForm').reset();
+    document.getElementById('ripFechaInput').value = todayStr();
+    fillCompraOrigenSelect('ripCompraOrigenInput', 'SEALED');
+    document.getElementById('ripPullsRows').innerHTML = '';
+    addPullRow();
+    openModal('ripModal');
+});
+
+document.getElementById('ripAddPullBtn').addEventListener('click', () => addPullRow());
+
+document.getElementById('ripForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pulls = getPullRows();
+    if (!pulls.length) { alert('Añade al menos una carta obtenida.'); return; }
+
+    const origenId = parseInt(document.getElementById('ripCompraOrigenInput').value, 10);
+    const vals = {
+        compra_origen_id: origenId,
+        fecha: document.getElementById('ripFechaInput').value,
+        comentarios: document.getElementById('ripComentariosInput').value || null,
+    };
+    const { data: rip, error } = await sb.from('rips').insert(vals).select().single();
+    if (error) { alert('Error guardando rip: ' + error.message); return; }
+
+    for (const pull of pulls) {
+        const producto_id = await findOrCreateProducto(pull.nombre, pull.categoria);
+        const { data: nuevaCompra, error: errC } = await sb.from('compras').insert({
+            producto_id,
+            cantidad: pull.cantidad,
+            precio_unitario: 0,
+            tipo: 'RAW',
+            estado: 'recibido',
+            fecha: vals.fecha,
+            comentarios: `Obtenida al abrir ${STATE.compras.find(c => c.id === origenId)?.referencia || ''}`,
+        }).select().single();
+        if (errC) { alert('Error creando carta: ' + errC.message); continue; }
+        await copiarRepartoSocios(origenId, nuevaCompra.id);
+        await sb.from('rip_pulls').insert({
+            rip_id: rip.id, producto_id, cantidad: pull.cantidad, compra_resultante_id: nuevaCompra.id,
+        });
+    }
+
+    closeModal('ripModal');
+    await loadAll();
+    renderAll();
+});
+
+function renderRips() {
+    const tbody = document.getElementById('ripsTableBody');
+    tbody.innerHTML = '';
+    STATE.rips.forEach(r => {
+        const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
+        const pulls = (r.rip_pulls || [])
+            .map(p => `${productoNombre(p.producto_id)} (${p.cantidad}x)`).join(', ');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${r.referencia}</td>
+            <td>${r.fecha || '-'}</td>
+            <td>${origen ? productoNombre(origen.producto_id) : '-'}</td>
+            <td>${pulls || '-'}</td>
+            <td><button class="icon-btn delete-rip" data-id="${r.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.delete-rip').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar este rip? (las cartas obtenidas no se borran del inventario)')) return;
+            const { error } = await sb.from('rips').delete().eq('id', btn.dataset.id);
+            if (error) { alert('Error: ' + error.message); return; }
+            await loadAll();
+            renderAll();
+        });
+    });
+}
+
 // ---------- Render global ----------
 function renderAll() {
     refreshProductosDatalist();
@@ -546,6 +818,8 @@ function renderAll() {
     renderPagos();
     renderSocios();
     renderResumen();
+    renderGraded();
+    renderRips();
 }
 
 // ---------- Tema ----------
