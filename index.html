@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCG Vault | TCG PRO INVESTING</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+
+    <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <span class="material-symbols-outlined logo-icon">view_cozy</span>
+                <h1 class="logo-text">TCG Vault</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" id="navResumen">
+                    <span class="material-symbols-outlined">dashboard</span>
+                    <span>Resumen</span>
+                </a>
+                <a href="#" class="nav-item" id="navCompras">
+                    <span class="material-symbols-outlined">shopping_cart</span>
+                    <span>Compras</span>
+                </a>
+                <a href="#" class="nav-item" id="navReservas">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <span>Reservas / Pedidos</span>
+                </a>
+                <a href="#" class="nav-item" id="navVentas">
+                    <span class="material-symbols-outlined">receipt_long</span>
+                    <span>Ventas</span>
+                </a>
+                <a href="#" class="nav-item" id="navInventario">
+                    <span class="material-symbols-outlined">inventory_2</span>
+                    <span>Inventario actual</span>
+                </a>
+                <a href="#" class="nav-item" id="navPagos">
+                    <span class="material-symbols-outlined">currency_exchange</span>
+                    <span>Pagos entre socios</span>
+                </a>
+                <a href="#" class="nav-item" id="navSocios">
+                    <span class="material-symbols-outlined">groups</span>
+                    <span>Resumen por socio</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button id="themeToggle" class="theme-btn">
+                    <span class="material-symbols-outlined light-icon">light_mode</span>
+                    <span class="material-symbols-outlined dark-icon" style="display:none;">dark_mode</span>
+                    <span class="theme-text">Cambiar tema</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-header">
+                <div class="portfolio-selector-wrapper">
+                    <span class="label">TCG PRO INVESTING</span>
+                </div>
+                <div class="user-profile" style="display: flex; align-items: center; gap: 16px;">
+                    <button id="visibilityToggle" class="icon-btn" title="Mostrar/ocultar importes">
+                        <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Resumen -->
+            <div id="resumenView" class="view-section dashboard-grid">
+                <div class="card value-card glass-panel span-2">
+                    <div class="card-header"><h3>Inventario actual (a coste)</h3></div>
+                    <div class="value-amount"><h1 id="statValorInventario">€0.00</h1></div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><span class="label">Comprado</span><span class="value" id="statTotalComprado">€0.00</span></div>
+                        <div class="stat-item"><span class="label">Vendido</span><span class="value" id="statTotalVendido">€0.00</span></div>
+                        <div class="stat-item"><span class="label">Beneficio</span><span class="value" id="statBeneficio">€0.00</span></div>
+                        <div class="stat-item"><span class="label">Reservas pendientes de pago</span><span class="value" id="statPendientePago">€0.00</span></div>
+                    </div>
+                </div>
+                <div class="card glass-panel span-3">
+                    <div class="card-header"><h3>Inventario por categoría (valor)</h3></div>
+                    <div class="chart-container" style="height:280px;">
+                        <canvas id="categoriaChart"></canvas>
+                    </div>
+                </div>
+                <div class="card glass-panel span-3">
+                    <div class="card-header"><h3>Invertido vs. vendido por socio</h3></div>
+                    <div class="chart-container" style="height:280px;">
+                        <canvas id="socioChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compras -->
+            <div id="comprasView" class="view-section" style="display:none;">
+                <div class="card glass-panel">
+                    <div class="card-header">
+                        <h3>Compras</h3>
+                        <button class="primary-btn" id="addCompraBtn"><span class="material-symbols-outlined">add</span> Nueva compra</button>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table class="products-table">
+                        <thead><tr>
+                            <th>Ref.</th><th>Fecha</th><th>Producto</th><th>Categoría</th>
+                            <th class="text-right">Cant.</th><th class="text-right">Precio unit.</th>
+                            <th class="text-right">Total</th><th>Socios</th><th>Estado</th><th></th>
+                        </tr></thead>
+                        <tbody id="comprasTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reservas -->
+            <div id="reservasView" class="view-section" style="display:none;">
+                <div class="card glass-panel">
+                    <div class="card-header">
+                        <h3>Reservas / Pedidos (pago parcial)</h3>
+                        <button class="primary-btn" id="addReservaBtn"><span class="material-symbols-outlined">add</span> Nueva reserva</button>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table class="products-table">
+                        <thead><tr>
+                            <th>Ref.</th><th>Fecha</th><th>Producto</th><th>Proveedor</th>
+                            <th class="text-right">Total</th><th class="text-right">Pagado</th>
+                            <th class="text-right">Pendiente</th><th>Socios</th><th></th>
+                        </tr></thead>
+                        <tbody id="reservasTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ventas -->
+            <div id="ventasView" class="view-section" style="display:none;">
+                <div class="card glass-panel">
+                    <div class="card-header">
+                        <h3>Ventas</h3>
+                        <button class="primary-btn" id="addVentaBtn"><span class="material-symbols-outlined">add</span> Nueva venta</button>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table class="products-table">
+                        <thead><tr>
+                            <th>Ref.</th><th>Fecha</th><th>Producto</th><th class="text-right">Cant.</th>
+                            <th class="text-right">Precio venta</th><th class="text-right">Total</th>
+                            <th class="text-right">Margen</th><th>Canal</th><th>Cobrado</th><th>Socios</th><th></th>
+                        </tr></thead>
+                        <tbody id="ventasTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventario -->
+            <div id="inventarioView" class="view-section" style="display:none;">
+                <div class="card glass-panel">
+                    <div class="card-header"><h3>Inventario actual</h3></div>
+                    <div style="overflow-x:auto;">
+                    <table class="products-table">
+                        <thead><tr>
+                            <th>Producto</th><th>Categoría</th><th class="text-right">Comprado</th>
+                            <th class="text-right">Vendido</th><th class="text-right">Disponible</th>
+                            <th class="text-right">Coste medio</th><th class="text-right">Valor en stock</th>
+                        </tr></thead>
+                        <tbody id="inventarioTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagos entre socios -->
+            <div id="pagosView" class="view-section" style="display:none;">
+                <div class="card glass-panel">
+                    <div class="card-header">
+                        <h3>Pagos entre socios</h3>
+                        <button class="primary-btn" id="addPagoBtn"><span class="material-symbols-outlined">add</span> Nuevo pago</button>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table class="products-table">
+                        <thead><tr><th>Ref.</th><th>Fecha</th><th>Pagador</th><th class="text-right">Importe</th><th>Descripción</th></tr></thead>
+                        <tbody id="pagosTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumen por socio -->
+            <div id="sociosView" class="view-section" style="display:none;">
+                <div class="card glass-panel">
+                    <div class="card-header"><h3>Resumen por socio</h3></div>
+                    <div style="overflow-x:auto;">
+                    <table class="products-table">
+                        <thead><tr>
+                            <th>Socio</th><th class="text-right">Invertido</th><th class="text-right">Pendiente de pagar</th>
+                            <th class="text-right">Vendido</th><th class="text-right">Cobrado</th>
+                            <th class="text-right">Beneficio</th><th class="text-right">Pagos realizados</th>
+                        </tr></thead>
+                        <tbody id="sociosTableBody"></tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Compra / Reserva -->
+    <div id="compraModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="compraModalTitle">Nueva compra</h3>
+                <button class="close-modal" data-close="compraModal">&times;</button>
+            </div>
+            <form id="compraForm">
+                <input type="hidden" id="compraEstadoInput" value="recibido">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Producto</label>
+                        <input type="text" id="compraProductoInput" list="productosList" required autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select id="compraCategoriaInput" required>
+                            <option value="Pokémon">Pokémon</option>
+                            <option value="One Piece">One Piece</option>
+                            <option value="Disney Lorcana">Disney Lorcana</option>
+                            <option value="Riftbound">Riftbound</option>
+                            <option value="Magic: The Gathering">Magic: The Gathering</option>
+                            <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
+                            <option value="Naruto">Naruto</option>
+                            <option value="Otros TCG">Otros TCG</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <select id="compraTipoInput">
+                            <option value="SEALED">Sellado</option>
+                            <option value="RAW">Suelta (sin gradear)</option>
+                            <option value="GRADED">Gradeada</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Idioma</label>
+                        <input type="text" id="compraIdiomaInput" placeholder="English">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad</label>
+                        <input type="number" id="compraCantidadInput" min="1" step="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Precio unitario (€)</label>
+                        <input type="number" id="compraPrecioInput" min="0" step="0.01" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Proveedor / vendedor</label>
+                        <input type="text" id="compraProveedorInput">
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha</label>
+                        <input type="date" id="compraFechaInput" required>
+                    </div>
+                </div>
+                <div class="form-row" id="compraPagadoRow" style="display:none;">
+                    <div class="form-group">
+                        <label>Importe ya pagado (€)</label>
+                        <input type="number" id="compraPagadoInput" min="0" step="0.01" value="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Comentarios</label>
+                    <input type="text" id="compraComentariosInput">
+                </div>
+
+                <div class="form-group">
+                    <label>Reparto de socios (debe sumar 100%)</label>
+                    <div id="compraSociosRows"></div>
+                    <button type="button" class="icon-btn" id="compraAddSocioBtn" title="Añadir socio">
+                        <span class="material-symbols-outlined">add_circle</span> Añadir socio
+                    </button>
+                </div>
+
+                <button type="submit" class="submit-btn">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Venta -->
+    <div id="ventaModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nueva venta</h3>
+                <button class="close-modal" data-close="ventaModal">&times;</button>
+            </div>
+            <form id="ventaForm">
+                <div class="form-group">
+                    <label>Producto</label>
+                    <input type="text" id="ventaProductoInput" list="productosList" required autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cantidad</label>
+                        <input type="number" id="ventaCantidadInput" min="1" step="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Coste unitario (€)</label>
+                        <input type="number" id="ventaCosteInput" min="0" step="0.01" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Precio de venta unitario (€)</label>
+                        <input type="number" id="ventaPrecioInput" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha</label>
+                        <input type="date" id="ventaFechaInput" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Canal de venta</label>
+                        <select id="ventaCanalInput">
+                            <option value="cardmarket">Cardmarket</option>
+                            <option value="vinted">Vinted</option>
+                            <option value="wallapop">Wallapop</option>
+                            <option value="directo" selected>Directo</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>¿Cobrado?</label>
+                        <select id="ventaCobradoInput">
+                            <option value="true" selected>Sí</option>
+                            <option value="false">No, pendiente de cobro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Comentarios</label>
+                    <input type="text" id="ventaComentariosInput">
+                </div>
+
+                <div class="form-group">
+                    <label>Reparto de socios (debe sumar 100%)</label>
+                    <div id="ventaSociosRows"></div>
+                    <button type="button" class="icon-btn" id="ventaAddSocioBtn" title="Añadir socio">
+                        <span class="material-symbols-outlined">add_circle</span> Añadir socio
+                    </button>
+                </div>
+
+                <button type="submit" class="submit-btn">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Pago -->
+    <div id="pagoModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nuevo pago entre socios</h3>
+                <button class="close-modal" data-close="pagoModal">&times;</button>
+            </div>
+            <form id="pagoForm">
+                <div class="form-group">
+                    <label>Pagador</label>
+                    <select id="pagoPagadorInput" required></select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Importe (€)</label>
+                        <input type="number" id="pagoImporteInput" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha</label>
+                        <input type="date" id="pagoFechaInput" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <input type="text" id="pagoDescripcionInput">
+                </div>
+                <button type="submit" class="submit-btn">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <datalist id="productosList"></datalist>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
