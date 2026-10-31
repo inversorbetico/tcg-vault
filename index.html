@@ -16,7 +16,23 @@
     <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
-    <div id="app" class="app-container">
+    <div id="pinGate" style="position:fixed; inset:0; background:var(--bg-main); z-index:9999; display:flex; align-items:center; justify-content:center;">
+        <div class="modal-content" style="max-width:320px; width:90%;">
+            <div class="modal-header">
+                <h3>TCG Vault</h3>
+            </div>
+            <form id="pinForm">
+                <div class="form-group">
+                    <label>Introduce el PIN</label>
+                    <input type="password" inputmode="numeric" id="pinInput" autofocus>
+                </div>
+                <p id="pinError" style="display:none; color:var(--negative-color); font-size:13px; margin:-8px 0 16px;">PIN incorrecto.</p>
+                <button type="submit" class="submit-btn">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app" class="app-container" style="display:none;">
         <aside class="sidebar">
             <div class="sidebar-header">
                 <span class="material-symbols-outlined logo-icon">view_cozy</span>
@@ -77,6 +93,12 @@
                     <span class="label">TCG PRO INVESTING</span>
                 </div>
                 <div class="user-profile" style="display: flex; align-items: center; gap: 16px;">
+                    <div class="portfolio-selector" id="socioFilterBtn" tabindex="0">
+                        <span class="material-symbols-outlined" style="font-size:18px;">group</span>
+                        <span class="selected-text" id="socioFilterText">Todos los socios</span>
+                        <span class="material-symbols-outlined">unfold_more</span>
+                        <div class="dropdown-menu" id="socioFilterDropdown"></div>
+                    </div>
                     <button id="visibilityToggle" class="icon-btn" title="Mostrar/ocultar importes">
                         <span class="material-symbols-outlined">visibility</span>
                     </button>

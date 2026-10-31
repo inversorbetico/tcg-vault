@@ -238,10 +238,97 @@ document.getElementById('compraForm').addEventListener('submit', async (e) => {
     renderAll();
 });
 
+// ---------- Filtro por socio(s) ----------
+let FILTRO_SOCIOS = []; // vacio = todos los socios
+
+function initSocioFilter() {
+    const dropdown = document.getElementById('socioFilterDropdown');
+    dropdown.innerHTML = STATE.socios.map(s => `
+        <label class="dropdown-item" style="cursor:pointer;">
+            <input type="checkbox" class="socio-filter-checkbox" value="${s.id}" style="margin-right:8px;">
+            <span class="pf-name">${s.nombre}</span>
+        </label>
+    `).join('');
+    dropdown.querySelectorAll('.socio-filter-checkbox').forEach(cb => {
+        cb.addEventListener('change', () => {
+            FILTRO_SOCIOS = Array.from(dropdown.querySelectorAll('.socio-filter-checkbox:checked'))
+                .map(c => parseInt(c.value, 10));
+            updateSocioFilterLabel();
+            renderAll();
+        });
+    });
+}
+
+function updateSocioFilterLabel() {
+    const label = document.getElementById('socioFilterText');
+    if (!FILTRO_SOCIOS.length) {
+        label.textContent = 'Todos los socios';
+    } else {
+        const nombres = FILTRO_SOCIOS.map(id => socioNombre(id));
+        label.textContent = nombres.length > 1 ? `${nombres.length} socios` : nombres[0];
+    }
+}
+
+function shareDeSocios(repartoRows) {
+    if (!FILTRO_SOCIOS.length) return 1;
+    const total = (repartoRows || [])
+        .filter(r => FILTRO_SOCIOS.includes(r.socio_id))
+        .reduce((sum, r) => sum + r.porcentaje, 0);
+    return total / 100;
+}
+
+function incluyeAlgunSocio(repartoRows) {
+    if (!FILTRO_SOCIOS.length) return true;
+    return (repartoRows || []).some(r => FILTRO_SOCIOS.includes(r.socio_id));
+}
+
+function computeInventarioFiltrado() {
+    const porProducto = {};
+    const ensure = (pid) => {
+        if (!porProducto[pid]) {
+            const p = STATE.productos.find(x => x.id === pid);
+            porProducto[pid] = {
+                producto_id: pid, producto: p?.nombre || '-', categoria: p?.categoria || '-',
+                cantidad_comprada: 0, coste_total: 0, cantidad_vendida: 0, cantidad_ripeada: 0,
+            };
+        }
+        return porProducto[pid];
+    };
+
+    STATE.compras.filter(c => c.estado === 'recibido').forEach(c => {
+        const share = shareDeSocios(c.compra_socios);
+        if (share <= 0) return;
+        const acc = ensure(c.producto_id);
+        acc.cantidad_comprada += c.cantidad * share;
+        acc.coste_total += c.precio_total * share;
+    });
+    STATE.ventas.forEach(v => {
+        const share = shareDeSocios(v.venta_socios);
+        if (share <= 0) return;
+        ensure(v.producto_id).cantidad_vendida += v.cantidad * share;
+    });
+    STATE.rips.forEach(r => {
+        const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
+        if (!origen) return;
+        const share = shareDeSocios(origen.compra_socios);
+        if (share <= 0) return;
+        ensure(origen.producto_id).cantidad_ripeada += share;
+    });
+
+    return Object.values(porProducto).map(acc => {
+        const coste_medio = acc.cantidad_comprada > 0 ? acc.coste_total / acc.cantidad_comprada : 0;
+        const cantidad_disponible = acc.cantidad_comprada - acc.cantidad_vendida - acc.cantidad_ripeada;
+        return {
+            ...acc, coste_medio, cantidad_disponible,
+            valor_disponible: cantidad_disponible * coste_medio,
+        };
+    }).sort((a, b) => b.valor_disponible - a.valor_disponible);
+}
+
 function renderCompras() {
     const tbody = document.getElementById('comprasTableBody');
     tbody.innerHTML = '';
-    STATE.compras.filter(c => c.estado === 'recibido').forEach(c => {
+    STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios)).forEach(c => {
         const socios = (c.compra_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
         const tr = document.createElement('tr');
@@ -267,7 +354,7 @@ function renderCompras() {
 function renderReservas() {
     const tbody = document.getElementById('reservasTableBody');
     tbody.innerHTML = '';
-    STATE.compras.filter(c => c.estado === 'reservado').forEach(c => {
+    STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios)).forEach(c => {
         const socios = (c.compra_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
         const tr = document.createElement('tr');
@@ -370,7 +457,7 @@ document.getElementById('ventaForm').addEventListener('submit', async (e) => {
 function renderVentas() {
     const tbody = document.getElementById('ventasTableBody');
     tbody.innerHTML = '';
-    STATE.ventas.forEach(v => {
+    STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios)).forEach(v => {
         const socios = (v.venta_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
         const costeTotal = (v.precio_compra_base || 0) * (v.cantidad || 0);
@@ -408,14 +495,15 @@ function renderVentas() {
 function renderInventario() {
     const tbody = document.getElementById('inventarioTableBody');
     tbody.innerHTML = '';
-    STATE.inventario.filter(i => i.cantidad_disponible > 0).forEach(i => {
+    const datos = computeInventarioFiltrado();
+    datos.filter(i => i.cantidad_disponible > 0.001).forEach(i => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${i.producto}</td>
             <td>${i.categoria}</td>
-            <td class="text-right">${i.cantidad_comprada}</td>
-            <td class="text-right">${i.cantidad_vendida}</td>
-            <td class="text-right">${i.cantidad_disponible}</td>
+            <td class="text-right">${i.cantidad_comprada.toFixed(2)}</td>
+            <td class="text-right">${i.cantidad_vendida.toFixed(2)}</td>
+            <td class="text-right">${i.cantidad_disponible.toFixed(2)}</td>
             <td class="text-right">${formatCurrency(i.coste_medio)}</td>
             <td class="text-right">${formatCurrency(i.valor_disponible)}</td>
         `;
@@ -453,7 +541,7 @@ document.getElementById('pagoForm').addEventListener('submit', async (e) => {
 function renderPagos() {
     const tbody = document.getElementById('pagosTableBody');
     tbody.innerHTML = '';
-    STATE.pagos.forEach(p => {
+    STATE.pagos.filter(p => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(p.pagador_id)).forEach(p => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${p.referencia}</td>
@@ -470,7 +558,7 @@ function renderPagos() {
 function renderSocios() {
     const tbody = document.getElementById('sociosTableBody');
     tbody.innerHTML = '';
-    STATE.resumen.forEach(r => {
+    STATE.resumen.filter(r => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(r.socio_id)).forEach(r => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${r.socio}</td>
@@ -490,12 +578,15 @@ let categoriaChart = null;
 let socioChart = null;
 
 function renderResumen() {
-    const totalComprado = STATE.inventario.reduce((s, i) => s + (i.cantidad_comprada > 0 ? i.cantidad_comprada * i.coste_medio : 0), 0);
-    const totalVendido = STATE.resumen.reduce((s, r) => s + (r.vendido || 0), 0);
-    const totalInvertido = STATE.resumen.reduce((s, r) => s + (r.invertido || 0), 0);
+    const inventarioFiltrado = computeInventarioFiltrado();
+    const resumenFiltrado = STATE.resumen.filter(
+        r => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(r.socio_id));
+
+    const totalVendido = resumenFiltrado.reduce((s, r) => s + (r.vendido || 0), 0);
+    const totalInvertido = resumenFiltrado.reduce((s, r) => s + (r.invertido || 0), 0);
     const beneficio = totalVendido - totalInvertido;
-    const valorInventario = STATE.inventario.reduce((s, i) => s + (i.valor_disponible || 0), 0);
-    const pendientePago = STATE.resumen.reduce((s, r) => s + (r.pendiente_pago_compra || 0), 0);
+    const valorInventario = inventarioFiltrado.reduce((s, i) => s + (i.valor_disponible || 0), 0);
+    const pendientePago = resumenFiltrado.reduce((s, r) => s + (r.pendiente_pago_compra || 0), 0);
 
     document.getElementById('statValorInventario').textContent = formatCurrency(valorInventario);
     document.getElementById('statTotalComprado').textContent = formatCurrency(totalInvertido);
@@ -505,7 +596,7 @@ function renderResumen() {
 
     // Grafico por categoria
     const byCat = {};
-    STATE.inventario.forEach(i => {
+    inventarioFiltrado.forEach(i => {
         if (!byCat[i.categoria]) byCat[i.categoria] = 0;
         byCat[i.categoria] += i.valor_disponible || 0;
     });
@@ -523,9 +614,9 @@ function renderResumen() {
     }
 
     // Grafico por socio
-    const socioLabels = STATE.resumen.map(r => r.socio);
-    const invertidoData = STATE.resumen.map(r => r.invertido);
-    const vendidoData = STATE.resumen.map(r => r.vendido);
+    const socioLabels = resumenFiltrado.map(r => r.socio);
+    const invertidoData = resumenFiltrado.map(r => r.invertido);
+    const vendidoData = resumenFiltrado.map(r => r.vendido);
 
     const ctx2 = document.getElementById('socioChart');
     if (socioChart) socioChart.destroy();
@@ -592,6 +683,7 @@ function renderGraded() {
     tbody.innerHTML = '';
     STATE.gradings.forEach(g => {
         const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
+        if (!incluyeAlgunSocio(origen?.compra_socios)) return;
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${g.referencia}</td>
@@ -785,6 +877,7 @@ function renderRips() {
     tbody.innerHTML = '';
     STATE.rips.forEach(r => {
         const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
+        if (!incluyeAlgunSocio(origen?.compra_socios)) return;
         const pulls = (r.rip_pulls || [])
             .map(p => `${productoNombre(p.producto_id)} (${p.cantidad}x)`).join(', ');
         const tr = document.createElement('tr');
@@ -849,8 +942,29 @@ NAVS.forEach(n => {
     });
 });
 
-// ---------- Inicio ----------
-(async function init() {
+// ---------- PIN de acceso ----------
+async function iniciarApp() {
+    document.getElementById('pinGate').style.display = 'none';
+    document.getElementById('app').style.display = '';
     await loadAll();
+    initSocioFilter();
     renderAll();
-})();
+}
+
+document.getElementById('pinForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = document.getElementById('pinInput').value.trim();
+    if (val === window.APP_PIN) {
+        localStorage.setItem('tcgvault_pin_ok', 'true');
+        iniciarApp();
+    } else {
+        document.getElementById('pinError').style.display = 'block';
+        document.getElementById('pinInput').value = '';
+        document.getElementById('pinInput').focus();
+    }
+});
+
+// ---------- Inicio ----------
+if (localStorage.getItem('tcgvault_pin_ok') === 'true') {
+    iniciarApp();
+}
