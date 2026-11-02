@@ -140,11 +140,11 @@
                         <button class="primary-btn" id="addCompraBtn"><span class="material-symbols-outlined">add</span> Nueva compra</button>
                     </div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="comprasTable">
                         <thead><tr>
-                            <th>Ref.</th><th>Fecha</th><th>Producto</th><th>Categoría</th>
-                            <th class="text-right">Cant.</th><th class="text-right">Precio unit.</th>
-                            <th class="text-right">Total</th><th>Socios</th><th>Estado</th><th></th>
+                            <th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="producto">Producto</th><th data-sort="categoria">Categoría</th>
+                            <th class="text-right" data-sort="cantidad">Cant.</th><th class="text-right" data-sort="precio_unitario">Precio unit.</th>
+                            <th class="text-right" data-sort="total">Total</th><th>Socios</th><th>Estado</th><th></th>
                         </tr></thead>
                         <tbody id="comprasTableBody"></tbody>
                     </table>
@@ -160,11 +160,11 @@
                         <button class="primary-btn" id="addReservaBtn"><span class="material-symbols-outlined">add</span> Nueva reserva</button>
                     </div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="reservasTable">
                         <thead><tr>
-                            <th>Ref.</th><th>Fecha</th><th>Producto</th><th>Proveedor</th>
-                            <th class="text-right">Total</th><th class="text-right">Pagado</th>
-                            <th class="text-right">Pendiente</th><th>Socios</th><th></th>
+                            <th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="producto">Producto</th><th data-sort="proveedor">Proveedor</th>
+                            <th class="text-right" data-sort="total">Total</th><th class="text-right" data-sort="pagado">Pagado</th>
+                            <th class="text-right" data-sort="pendiente">Pendiente</th><th>Socios</th><th></th>
                         </tr></thead>
                         <tbody id="reservasTableBody"></tbody>
                     </table>
@@ -180,11 +180,11 @@
                         <button class="primary-btn" id="addVentaBtn"><span class="material-symbols-outlined">add</span> Nueva venta</button>
                     </div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="ventasTable">
                         <thead><tr>
-                            <th>Ref.</th><th>Fecha</th><th>Producto</th><th class="text-right">Cant.</th>
-                            <th class="text-right">Precio venta</th><th class="text-right">Total</th>
-                            <th class="text-right">Margen</th><th>Canal</th><th>Cobrado</th><th>Socios</th><th></th>
+                            <th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="producto">Producto</th><th class="text-right" data-sort="cantidad">Cant.</th>
+                            <th class="text-right" data-sort="precio_venta">Precio venta</th><th class="text-right" data-sort="total">Total</th>
+                            <th class="text-right" data-sort="margen">Margen</th><th data-sort="canal">Canal</th><th data-sort="cobrado">Cobrado</th><th>Socios</th><th></th>
                         </tr></thead>
                         <tbody id="ventasTableBody"></tbody>
                     </table>
@@ -197,11 +197,11 @@
                 <div class="card glass-panel">
                     <div class="card-header"><h3>Inventario actual</h3></div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="inventarioTable">
                         <thead><tr>
-                            <th>Producto</th><th>Categoría</th><th class="text-right">Comprado</th>
-                            <th class="text-right">Vendido</th><th class="text-right">Disponible</th>
-                            <th class="text-right">Coste medio</th><th class="text-right">Valor en stock</th>
+                            <th data-sort="producto">Producto</th><th data-sort="categoria">Categoría</th><th class="text-right" data-sort="cantidad_comprada">Comprado</th>
+                            <th class="text-right" data-sort="cantidad_vendida">Vendido</th><th class="text-right" data-sort="cantidad_disponible">Disponible</th>
+                            <th class="text-right" data-sort="coste_medio">Coste medio</th><th class="text-right" data-sort="valor_disponible">Valor en stock</th>
                         </tr></thead>
                         <tbody id="inventarioTableBody"></tbody>
                     </table>
@@ -217,10 +217,10 @@
                         <button class="primary-btn" id="addGradingBtn"><span class="material-symbols-outlined">add</span> Nuevo envío</button>
                     </div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="gradedTable">
                         <thead><tr>
-                            <th>Ref.</th><th>Producto</th><th>Empresa</th><th class="text-right">Coste grading</th>
-                            <th>F. envío</th><th>Estado</th><th class="text-right">Grado</th><th>F. recibido</th><th></th>
+                            <th data-sort="referencia">Ref.</th><th data-sort="producto">Producto</th><th data-sort="empresa">Empresa</th><th class="text-right" data-sort="coste_grading">Coste grading</th>
+                            <th data-sort="fecha_envio">F. envío</th><th data-sort="estado">Estado</th><th class="text-right" data-sort="grado">Grado</th><th data-sort="fecha_recibido">F. recibido</th><th></th>
                         </tr></thead>
                         <tbody id="gradedTableBody"></tbody>
                     </table>
@@ -236,9 +236,9 @@
                         <button class="primary-btn" id="addRipBtn"><span class="material-symbols-outlined">add</span> Nuevo rip</button>
                     </div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="ripsTable">
                         <thead><tr>
-                            <th>Ref.</th><th>Fecha</th><th>Caja/sobre abierto</th><th>Cartas obtenidas</th><th></th>
+                            <th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="origen">Caja/sobre abierto</th><th>Cartas obtenidas</th><th></th>
                         </tr></thead>
                         <tbody id="ripsTableBody"></tbody>
                     </table>
@@ -254,8 +254,8 @@
                         <button class="primary-btn" id="addPagoBtn"><span class="material-symbols-outlined">add</span> Nuevo pago</button>
                     </div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
-                        <thead><tr><th>Ref.</th><th>Fecha</th><th>Pagador</th><th class="text-right">Importe</th><th>Descripción</th><th></th></tr></thead>
+                    <table class="products-table" id="pagosTable">
+                        <thead><tr><th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="pagador">Pagador</th><th class="text-right" data-sort="importe">Importe</th><th data-sort="descripcion">Descripción</th><th></th></tr></thead>
                         <tbody id="pagosTableBody"></tbody>
                     </table>
                     </div>
@@ -267,11 +267,11 @@
                 <div class="card glass-panel">
                     <div class="card-header"><h3>Resumen por socio</h3></div>
                     <div style="overflow-x:auto;">
-                    <table class="products-table">
+                    <table class="products-table" id="sociosTable">
                         <thead><tr>
-                            <th>Socio</th><th class="text-right">Invertido</th><th class="text-right">Pendiente de pagar</th>
-                            <th class="text-right">Vendido</th><th class="text-right">Cobrado</th>
-                            <th class="text-right">Beneficio</th><th class="text-right">Pagos realizados</th>
+                            <th data-sort="socio">Socio</th><th class="text-right" data-sort="invertido">Invertido</th><th class="text-right" data-sort="pendiente_pago_compra">Pendiente de pagar</th>
+                            <th class="text-right" data-sort="vendido">Vendido</th><th class="text-right" data-sort="cobrado">Cobrado</th>
+                            <th class="text-right" data-sort="beneficio">Beneficio</th><th class="text-right" data-sort="pagos_realizados">Pagos realizados</th>
                         </tr></thead>
                         <tbody id="sociosTableBody"></tbody>
                     </table>
@@ -564,7 +564,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=3"></script>
-    <script src="app.js?v=3"></script>
+    <script src="config.js?v=4"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>

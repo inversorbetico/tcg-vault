@@ -195,15 +195,17 @@ document.getElementById('addReservaBtn').addEventListener('click', () => {
     openModal('compraModal');
 });
 
-function openEditCompra(id) {
+function openEditCompra(id, clone = false) {
     const c = STATE.compras.find(x => String(x.id) === String(id));
     if (!c) return;
     document.getElementById('compraForm').reset();
-    document.getElementById('compraIdInput').value = c.id;
-    document.getElementById('compraModalTitle').textContent =
-        c.estado === 'reservado' ? 'Editar reserva / pedido' : 'Editar compra';
+    document.getElementById('compraIdInput').value = clone ? '' : c.id;
+    const esReserva = c.estado === 'reservado';
+    document.getElementById('compraModalTitle').textContent = clone
+        ? (esReserva ? 'Nueva reserva / pedido (clonada)' : 'Nueva compra (clonada)')
+        : (esReserva ? 'Editar reserva / pedido' : 'Editar compra');
     document.getElementById('compraEstadoInput').value = c.estado;
-    document.getElementById('compraPagadoRow').style.display = c.estado === 'reservado' ? 'flex' : 'none';
+    document.getElementById('compraPagadoRow').style.display = esReserva ? 'flex' : 'none';
     document.getElementById('compraProductoInput').value = productoNombre(c.producto_id);
     const categoriaSelect = document.getElementById('compraCategoriaInput');
     categoriaSelect.value = STATE.productos.find(p => p.id === c.producto_id)?.categoria || '';
@@ -213,8 +215,8 @@ function openEditCompra(id) {
     document.getElementById('compraCantidadInput').value = c.cantidad;
     document.getElementById('compraPrecioInput').value = c.precio_unitario;
     document.getElementById('compraProveedorInput').value = c.proveedor || '';
-    document.getElementById('compraFechaInput').value = c.fecha || todayStr();
-    document.getElementById('compraPagadoInput').value = c.importe_pagado || 0;
+    document.getElementById('compraFechaInput').value = clone ? todayStr() : (c.fecha || todayStr());
+    document.getElementById('compraPagadoInput').value = clone ? 0 : (c.importe_pagado || 0);
     document.getElementById('compraComentariosInput').value = c.comentarios || '';
 
     document.getElementById('compraSociosRows').innerHTML = '';
@@ -368,10 +370,67 @@ function computeInventarioFiltrado() {
     }).sort((a, b) => b.valor_disponible - a.valor_disponible);
 }
 
+// ---------- Ordenacion de tablas ----------
+const SORT_STATE = {};
+
+function applySort(tableName, rows, columnGetters) {
+    const st = SORT_STATE[tableName];
+    if (!st || !st.key || !columnGetters[st.key]) return rows;
+    const getValue = columnGetters[st.key];
+    return [...rows].sort((a, b) => {
+        let va = getValue(a);
+        let vb = getValue(b);
+        if (va == null) va = '';
+        if (vb == null) vb = '';
+        if (typeof va === 'boolean') va = va ? 1 : 0;
+        if (typeof vb === 'boolean') vb = vb ? 1 : 0;
+        if (typeof va === 'string' || typeof vb === 'string') {
+            return st.dir * String(va).localeCompare(String(vb), 'es', { numeric: true, sensitivity: 'base' });
+        }
+        return st.dir * (va - vb);
+    });
+}
+
+function initSortableHeaders(tableId, tableName, onSort) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    table.querySelectorAll('thead th[data-sort]').forEach(th => {
+        th.classList.add('sortable');
+        th.addEventListener('click', () => {
+            const key = th.dataset.sort;
+            const st = SORT_STATE[tableName] || {};
+            st.key === key ? (st.dir = -st.dir) : (st.key = key, st.dir = 1);
+            SORT_STATE[tableName] = st;
+            updateSortHeaderClasses(table, tableName);
+            onSort();
+        });
+    });
+}
+
+function updateSortHeaderClasses(table, tableName) {
+    const st = SORT_STATE[tableName] || {};
+    table.querySelectorAll('thead th[data-sort]').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === st.key) {
+            th.classList.add(st.dir === 1 ? 'sort-asc' : 'sort-desc');
+        }
+    });
+}
+
 function renderCompras() {
     const tbody = document.getElementById('comprasTableBody');
     tbody.innerHTML = '';
-    STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios)).forEach(c => {
+    let rows = STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios));
+    rows = applySort('compras', rows, {
+        referencia: c => c.referencia,
+        fecha: c => c.fecha,
+        producto: c => productoNombre(c.producto_id),
+        categoria: c => STATE.productos.find(p => p.id === c.producto_id)?.categoria || '',
+        cantidad: c => c.cantidad,
+        precio_unitario: c => c.precio_unitario,
+        total: c => c.precio_total,
+    });
+    rows.forEach(c => {
         const socios = (c.compra_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
         const tr = document.createElement('tr');
@@ -387,6 +446,7 @@ function renderCompras() {
             <td><span class="pl-badge positive">Recibido</span></td>
             <td>
                 <button class="icon-btn edit-compra" data-id="${c.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn clone-compra" data-id="${c.id}" title="Clonar"><span class="material-symbols-outlined" style="font-size:16px;">content_copy</span></button>
                 <button class="icon-btn delete-compra" data-id="${c.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
             </td>
         `;
@@ -394,6 +454,9 @@ function renderCompras() {
     });
     tbody.querySelectorAll('.edit-compra').forEach(btn => {
         btn.addEventListener('click', () => openEditCompra(btn.dataset.id));
+    });
+    tbody.querySelectorAll('.clone-compra').forEach(btn => {
+        btn.addEventListener('click', () => openEditCompra(btn.dataset.id, true));
     });
     tbody.querySelectorAll('.delete-compra').forEach(btn => {
         btn.addEventListener('click', () => deleteCompra(btn.dataset.id));
@@ -403,7 +466,17 @@ function renderCompras() {
 function renderReservas() {
     const tbody = document.getElementById('reservasTableBody');
     tbody.innerHTML = '';
-    STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios)).forEach(c => {
+    let rows = STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios));
+    rows = applySort('reservas', rows, {
+        referencia: c => c.referencia,
+        fecha: c => c.fecha,
+        producto: c => productoNombre(c.producto_id),
+        proveedor: c => c.proveedor,
+        total: c => c.precio_total,
+        pagado: c => c.importe_pagado,
+        pendiente: c => c.pendiente_pagar,
+    });
+    rows.forEach(c => {
         const socios = (c.compra_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
         const tr = document.createElement('tr');
@@ -419,6 +492,7 @@ function renderReservas() {
             <td>
                 <button class="icon-btn receive-compra" data-id="${c.id}" title="Marcar recibido"><span class="material-symbols-outlined" style="font-size:16px;">inventory_2</span></button>
                 <button class="icon-btn edit-compra" data-id="${c.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn clone-compra" data-id="${c.id}" title="Clonar"><span class="material-symbols-outlined" style="font-size:16px;">content_copy</span></button>
                 <button class="icon-btn delete-compra" data-id="${c.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
             </td>
         `;
@@ -426,6 +500,9 @@ function renderReservas() {
     });
     tbody.querySelectorAll('.edit-compra').forEach(btn => {
         btn.addEventListener('click', () => openEditCompra(btn.dataset.id));
+    });
+    tbody.querySelectorAll('.clone-compra').forEach(btn => {
+        btn.addEventListener('click', () => openEditCompra(btn.dataset.id, true));
     });
     tbody.querySelectorAll('.delete-compra').forEach(btn => {
         btn.addEventListener('click', () => deleteCompra(btn.dataset.id));
@@ -467,19 +544,19 @@ document.getElementById('addVentaBtn').addEventListener('click', () => {
     openModal('ventaModal');
 });
 
-function openEditVenta(id) {
+function openEditVenta(id, clone = false) {
     const v = STATE.ventas.find(x => String(x.id) === String(id));
     if (!v) return;
     document.getElementById('ventaForm').reset();
-    document.getElementById('ventaIdInput').value = v.id;
-    document.getElementById('ventaModalTitle').textContent = 'Editar venta';
+    document.getElementById('ventaIdInput').value = clone ? '' : v.id;
+    document.getElementById('ventaModalTitle').textContent = clone ? 'Nueva venta (clonada)' : 'Editar venta';
     document.getElementById('ventaProductoInput').value = productoNombre(v.producto_id);
     document.getElementById('ventaCantidadInput').value = v.cantidad;
     document.getElementById('ventaCosteInput').value = v.precio_compra_base;
     document.getElementById('ventaPrecioInput').value = v.precio_venta;
-    document.getElementById('ventaFechaInput').value = v.fecha || todayStr();
+    document.getElementById('ventaFechaInput').value = clone ? todayStr() : (v.fecha || todayStr());
     document.getElementById('ventaCanalInput').value = v.canal;
-    document.getElementById('ventaCobradoInput').value = v.cobrado ? 'true' : 'false';
+    document.getElementById('ventaCobradoInput').value = clone ? 'true' : (v.cobrado ? 'true' : 'false');
     document.getElementById('ventaComentariosInput').value = v.comentarios || '';
 
     document.getElementById('ventaSociosRows').innerHTML = '';
@@ -542,17 +619,31 @@ document.getElementById('ventaForm').addEventListener('submit', async (e) => {
     renderAll();
 });
 
+function margenVenta(v) {
+    const costeTotal = (v.precio_compra_base || 0) * (v.cantidad || 0);
+    const beneficioVenta = (v.precio_total_venta || 0) - costeTotal;
+    return v.precio_total_venta > 0 ? (beneficioVenta / v.precio_total_venta) * 100 : 0;
+}
+
 function renderVentas() {
     const tbody = document.getElementById('ventasTableBody');
     tbody.innerHTML = '';
-    STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios)).forEach(v => {
+    let rows = STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios));
+    rows = applySort('ventas', rows, {
+        referencia: v => v.referencia,
+        fecha: v => v.fecha,
+        producto: v => productoNombre(v.producto_id),
+        cantidad: v => v.cantidad,
+        precio_venta: v => v.precio_venta,
+        total: v => v.precio_total_venta,
+        margen: v => margenVenta(v),
+        canal: v => v.canal,
+        cobrado: v => v.cobrado,
+    });
+    rows.forEach(v => {
         const socios = (v.venta_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
-        const costeTotal = (v.precio_compra_base || 0) * (v.cantidad || 0);
-        const beneficioVenta = (v.precio_total_venta || 0) - costeTotal;
-        const margen = v.precio_total_venta > 0
-            ? (beneficioVenta / v.precio_total_venta) * 100
-            : 0;
+        const margen = margenVenta(v);
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${v.referencia}</td>
@@ -567,6 +658,7 @@ function renderVentas() {
             <td>${socios}</td>
             <td>
                 <button class="icon-btn edit-venta" data-id="${v.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn clone-venta" data-id="${v.id}" title="Clonar"><span class="material-symbols-outlined" style="font-size:16px;">content_copy</span></button>
                 <button class="icon-btn delete-venta" data-id="${v.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
             </td>
         `;
@@ -574,6 +666,9 @@ function renderVentas() {
     });
     tbody.querySelectorAll('.edit-venta').forEach(btn => {
         btn.addEventListener('click', () => openEditVenta(btn.dataset.id));
+    });
+    tbody.querySelectorAll('.clone-venta').forEach(btn => {
+        btn.addEventListener('click', () => openEditVenta(btn.dataset.id, true));
     });
     tbody.querySelectorAll('.delete-venta').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -590,8 +685,17 @@ function renderVentas() {
 function renderInventario() {
     const tbody = document.getElementById('inventarioTableBody');
     tbody.innerHTML = '';
-    const datos = computeInventarioFiltrado();
-    datos.filter(i => i.cantidad_disponible > 0.001).forEach(i => {
+    let datos = computeInventarioFiltrado().filter(i => i.cantidad_disponible > 0.001);
+    datos = applySort('inventario', datos, {
+        producto: i => i.producto,
+        categoria: i => i.categoria,
+        cantidad_comprada: i => i.cantidad_comprada,
+        cantidad_vendida: i => i.cantidad_vendida,
+        cantidad_disponible: i => i.cantidad_disponible,
+        coste_medio: i => i.coste_medio,
+        valor_disponible: i => i.valor_disponible,
+    });
+    datos.forEach(i => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${i.producto}</td>
@@ -620,16 +724,16 @@ document.getElementById('addPagoBtn').addEventListener('click', () => {
     openModal('pagoModal');
 });
 
-function openEditPago(id) {
+function openEditPago(id, clone = false) {
     const p = STATE.pagos.find(x => String(x.id) === String(id));
     if (!p) return;
     document.getElementById('pagoForm').reset();
-    document.getElementById('pagoIdInput').value = p.id;
-    document.getElementById('pagoModalTitle').textContent = 'Editar pago';
+    document.getElementById('pagoIdInput').value = clone ? '' : p.id;
+    document.getElementById('pagoModalTitle').textContent = clone ? 'Nuevo pago (clonado)' : 'Editar pago';
     fillPagadorSelect();
     document.getElementById('pagoPagadorInput').value = p.pagador_id;
     document.getElementById('pagoImporteInput').value = p.importe;
-    document.getElementById('pagoFechaInput').value = p.fecha || todayStr();
+    document.getElementById('pagoFechaInput').value = clone ? todayStr() : (p.fecha || todayStr());
     document.getElementById('pagoDescripcionInput').value = p.descripcion || '';
     openModal('pagoModal');
 }
@@ -655,7 +759,15 @@ document.getElementById('pagoForm').addEventListener('submit', async (e) => {
 function renderPagos() {
     const tbody = document.getElementById('pagosTableBody');
     tbody.innerHTML = '';
-    STATE.pagos.filter(p => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(p.pagador_id)).forEach(p => {
+    let rows = STATE.pagos.filter(p => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(p.pagador_id));
+    rows = applySort('pagos', rows, {
+        referencia: p => p.referencia,
+        fecha: p => p.fecha,
+        pagador: p => socioNombre(p.pagador_id),
+        importe: p => p.importe,
+        descripcion: p => p.descripcion,
+    });
+    rows.forEach(p => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${p.referencia}</td>
@@ -665,6 +777,7 @@ function renderPagos() {
             <td>${p.descripcion || '-'}</td>
             <td>
                 <button class="icon-btn edit-pago" data-id="${p.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn clone-pago" data-id="${p.id}" title="Clonar"><span class="material-symbols-outlined" style="font-size:16px;">content_copy</span></button>
                 <button class="icon-btn delete-pago" data-id="${p.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
             </td>
         `;
@@ -672,6 +785,9 @@ function renderPagos() {
     });
     tbody.querySelectorAll('.edit-pago').forEach(btn => {
         btn.addEventListener('click', () => openEditPago(btn.dataset.id));
+    });
+    tbody.querySelectorAll('.clone-pago').forEach(btn => {
+        btn.addEventListener('click', () => openEditPago(btn.dataset.id, true));
     });
     tbody.querySelectorAll('.delete-pago').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -688,7 +804,17 @@ function renderPagos() {
 function renderSocios() {
     const tbody = document.getElementById('sociosTableBody');
     tbody.innerHTML = '';
-    STATE.resumen.filter(r => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(r.socio_id)).forEach(r => {
+    let rows = STATE.resumen.filter(r => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(r.socio_id));
+    rows = applySort('socios', rows, {
+        socio: r => r.socio,
+        invertido: r => r.invertido,
+        pendiente_pago_compra: r => r.pendiente_pago_compra,
+        vendido: r => r.vendido,
+        cobrado: r => r.cobrado,
+        beneficio: r => r.beneficio,
+        pagos_realizados: r => r.pagos_realizados,
+    });
+    rows.forEach(r => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${r.socio}</td>
@@ -714,7 +840,7 @@ function renderResumen() {
 
     const totalVendido = resumenFiltrado.reduce((s, r) => s + (r.vendido || 0), 0);
     const totalInvertido = resumenFiltrado.reduce((s, r) => s + (r.invertido || 0), 0);
-    const beneficio = totalVendido - totalInvertido;
+    const beneficio = resumenFiltrado.reduce((s, r) => s + (r.beneficio || 0), 0);
     const valorInventario = inventarioFiltrado.reduce((s, i) => s + (i.valor_disponible || 0), 0);
     const pendientePago = resumenFiltrado.reduce((s, r) => s + (r.pendiente_pago_compra || 0), 0);
 
@@ -812,9 +938,25 @@ document.getElementById('gradingForm').addEventListener('submit', async (e) => {
 function renderGraded() {
     const tbody = document.getElementById('gradedTableBody');
     tbody.innerHTML = '';
-    STATE.gradings.forEach(g => {
+    let rows = STATE.gradings.filter(g => {
         const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
-        if (!incluyeAlgunSocio(origen?.compra_socios)) return;
+        return incluyeAlgunSocio(origen?.compra_socios);
+    });
+    rows = applySort('graded', rows, {
+        referencia: g => g.referencia,
+        producto: g => {
+            const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
+            return origen ? productoNombre(origen.producto_id) : '';
+        },
+        empresa: g => g.grading_company,
+        coste_grading: g => g.coste_grading,
+        fecha_envio: g => g.fecha_envio,
+        estado: g => g.estado,
+        grado: g => g.grado,
+        fecha_recibido: g => g.fecha_recibido,
+    });
+    rows.forEach(g => {
+        const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${g.referencia}</td>
@@ -1007,9 +1149,20 @@ document.getElementById('ripForm').addEventListener('submit', async (e) => {
 function renderRips() {
     const tbody = document.getElementById('ripsTableBody');
     tbody.innerHTML = '';
-    STATE.rips.forEach(r => {
+    let rows = STATE.rips.filter(r => {
         const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
-        if (!incluyeAlgunSocio(origen?.compra_socios)) return;
+        return incluyeAlgunSocio(origen?.compra_socios);
+    });
+    rows = applySort('rips', rows, {
+        referencia: r => r.referencia,
+        fecha: r => r.fecha,
+        origen: r => {
+            const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
+            return origen ? productoNombre(origen.producto_id) : '';
+        },
+    });
+    rows.forEach(r => {
+        const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
         const pulls = (r.rip_pulls || [])
             .map(p => `${productoNombre(p.producto_id)} (${p.cantidad}x)`).join(', ');
         const tr = document.createElement('tr');
@@ -1046,6 +1199,15 @@ function renderAll() {
     renderGraded();
     renderRips();
 }
+
+initSortableHeaders('comprasTable', 'compras', renderCompras);
+initSortableHeaders('reservasTable', 'reservas', renderReservas);
+initSortableHeaders('ventasTable', 'ventas', renderVentas);
+initSortableHeaders('inventarioTable', 'inventario', renderInventario);
+initSortableHeaders('gradedTable', 'graded', renderGraded);
+initSortableHeaders('ripsTable', 'rips', renderRips);
+initSortableHeaders('pagosTable', 'pagos', renderPagos);
+initSortableHeaders('sociosTable', 'socios', renderSocios);
 
 // ---------- Tema ----------
 document.getElementById('themeToggle').addEventListener('click', () => {
