@@ -680,6 +680,34 @@ function renderVentas() {
             renderAll();
         });
     });
+
+    // Datos rapidos
+    const totalVendidoVentas = rows.reduce((s, v) => s + (v.precio_total_venta || 0), 0);
+    const totalCosteVentas = rows.reduce((s, v) => s + (v.precio_compra_base || 0) * (v.cantidad || 0), 0);
+    const margenMedio = totalVendidoVentas > 0
+        ? ((totalVendidoVentas - totalCosteVentas) / totalVendidoVentas) * 100
+        : 0;
+    document.getElementById('statVentasMargenMedio').textContent = margenMedio.toFixed(1) + '%';
+    document.getElementById('statVentasTotalVendido').textContent = formatCurrency(totalVendidoVentas);
+
+    const porSocio = {};
+    rows.forEach(v => {
+        (v.venta_socios || []).forEach(s => {
+            porSocio[s.socio_id] = (porSocio[s.socio_id] || 0) + (v.precio_total_venta || 0) * s.porcentaje / 100;
+        });
+    });
+    const socioLabelsV = Object.keys(porSocio).map(id => socioNombre(parseInt(id, 10)));
+    const socioValuesV = Object.values(porSocio);
+
+    const ctxVS = document.getElementById('ventasSocioChart');
+    if (ventasSocioChart) ventasSocioChart.destroy();
+    if (ctxVS && window.Chart) {
+        ventasSocioChart = new Chart(ctxVS.getContext('2d'), {
+            type: 'doughnut',
+            data: { labels: socioLabelsV, datasets: [{ data: socioValuesV }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
 }
 
 // ---------- Inventario ----------
@@ -709,6 +737,27 @@ function renderInventario() {
         `;
         tbody.appendChild(tr);
     });
+
+    // Datos rapidos
+    const valorTotalInventario = datos.reduce((s, i) => s + (i.valor_disponible || 0), 0);
+    document.getElementById('statInventarioValorTotal').textContent = formatCurrency(valorTotalInventario);
+
+    const porCategoria = {};
+    datos.forEach(i => {
+        porCategoria[i.categoria] = (porCategoria[i.categoria] || 0) + (i.valor_disponible || 0);
+    });
+    const catLabelsInv = Object.keys(porCategoria);
+    const catValuesInv = Object.values(porCategoria);
+
+    const ctxInvCat = document.getElementById('inventarioCategoriaChart');
+    if (inventarioCategoriaChart) inventarioCategoriaChart.destroy();
+    if (ctxInvCat && window.Chart) {
+        inventarioCategoriaChart = new Chart(ctxInvCat.getContext('2d'), {
+            type: 'doughnut',
+            data: { labels: catLabelsInv, datasets: [{ data: catValuesInv }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
 }
 
 // ---------- Pagos ----------
@@ -834,6 +883,8 @@ function renderSocios() {
 let categoriaChart = null;
 let socioChart = null;
 let estadosChart = null;
+let ventasSocioChart = null;
+let inventarioCategoriaChart = null;
 
 function renderResumen() {
     const inventarioFiltrado = computeInventarioFiltrado();

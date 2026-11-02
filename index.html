@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-    <link rel="stylesheet" href="style.css?v=2">
+    <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
     <div id="pinGate" style="position:fixed; inset:0; background:var(--bg-main); z-index:9999; display:flex; align-items:center; justify-content:center;">
@@ -185,6 +185,14 @@
                         <h3>Ventas</h3>
                         <button class="primary-btn" id="addVentaBtn"><span class="material-symbols-outlined">add</span> Nueva venta</button>
                     </div>
+                    <div class="quick-stats-row">
+                        <div class="stat-item"><span class="label">Margen medio</span><span class="value" id="statVentasMargenMedio">0%</span></div>
+                        <div class="stat-item"><span class="label">Total vendido</span><span class="value" id="statVentasTotalVendido">€0.00</span></div>
+                        <div class="mini-chart-card">
+                            <span class="mini-chart-title">Distribución de ventas por socio</span>
+                            <div class="chart-container"><canvas id="ventasSocioChart"></canvas></div>
+                        </div>
+                    </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="ventasTable">
                         <thead><tr>
@@ -202,6 +210,13 @@
             <div id="inventarioView" class="view-section" style="display:none;">
                 <div class="card glass-panel">
                     <div class="card-header"><h3>Inventario actual</h3></div>
+                    <div class="quick-stats-row">
+                        <div class="stat-item"><span class="label">Valor en stock</span><span class="value" id="statInventarioValorTotal">€0.00</span></div>
+                        <div class="mini-chart-card">
+                            <span class="mini-chart-title">Distribución por TCG</span>
+                            <div class="chart-container"><canvas id="inventarioCategoriaChart"></canvas></div>
+                        </div>
+                    </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="inventarioTable">
                         <thead><tr>
@@ -330,15 +345,10 @@
                         <label>Idioma</label>
                         <select id="compraIdiomaInput">
                             <option value="">Sin especificar</option>
+                            <option value="Spanish">Spanish</option>
                             <option value="English">English</option>
                             <option value="Japanese">Japanese</option>
-                            <option value="Spanish">Spanish</option>
                             <option value="Korean">Korean</option>
-                            <option value="Chinese">Chinese</option>
-                            <option value="German">German</option>
-                            <option value="French">French</option>
-                            <option value="Italian">Italian</option>
-                            <option value="Otro">Otro</option>
                         </select>
                     </div>
                 </div>
@@ -581,7 +591,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=5"></script>
-    <script src="app.js?v=5"></script>
+    <script src="config.js?v=6"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>
