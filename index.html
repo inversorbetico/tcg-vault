@@ -118,6 +118,12 @@
                         <div class="stat-item"><span class="label">Reservas pendientes de pago</span><span class="value" id="statPendientePago">€0.00</span></div>
                     </div>
                 </div>
+                <div class="card glass-panel">
+                    <div class="card-header"><h3>Estados (inventario / reservado / vendido)</h3></div>
+                    <div class="chart-container" style="height:280px;">
+                        <canvas id="estadosChart"></canvas>
+                    </div>
+                </div>
                 <div class="card glass-panel span-3">
                     <div class="card-header"><h3>Inventario por categoría (valor)</h3></div>
                     <div class="chart-container" style="height:280px;">
@@ -322,7 +328,18 @@
                     </div>
                     <div class="form-group">
                         <label>Idioma</label>
-                        <input type="text" id="compraIdiomaInput" placeholder="English">
+                        <select id="compraIdiomaInput">
+                            <option value="">Sin especificar</option>
+                            <option value="English">English</option>
+                            <option value="Japanese">Japanese</option>
+                            <option value="Spanish">Spanish</option>
+                            <option value="Korean">Korean</option>
+                            <option value="Chinese">Chinese</option>
+                            <option value="German">German</option>
+                            <option value="French">French</option>
+                            <option value="Italian">Italian</option>
+                            <option value="Otro">Otro</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-row">
@@ -564,7 +581,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=4"></script>
-    <script src="app.js?v=4"></script>
+    <script src="config.js?v=5"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

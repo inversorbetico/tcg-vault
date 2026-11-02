@@ -58,7 +58,15 @@ function productoNombre(id) {
 async function findOrCreateProducto(nombre, categoria) {
     const existing = STATE.productos.find(
         p => p.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
-    if (existing) return existing.id;
+    if (existing) {
+        if (categoria && categoria !== existing.categoria) {
+            const { error } = await sb.from('productos')
+                .update({ categoria }).eq('id', existing.id);
+            if (error) { alert('Error actualizando categoría: ' + error.message); throw error; }
+            existing.categoria = categoria;
+        }
+        return existing.id;
+    }
     const { data, error } = await sb.from('productos')
         .insert({ nombre: nombre.trim(), categoria })
         .select().single();
@@ -157,15 +165,11 @@ function refreshProductosDatalist() {
 function onProductoInputChange(inputId, categoriaSelectId) {
     const input = document.getElementById(inputId);
     const categoriaSelect = document.getElementById(categoriaSelectId);
+    if (!categoriaSelect) return;
     input.addEventListener('input', () => {
         const match = STATE.productos.find(
             p => p.nombre.trim().toLowerCase() === input.value.trim().toLowerCase());
-        if (match) {
-            categoriaSelect.value = match.categoria;
-            categoriaSelect.disabled = true;
-        } else {
-            categoriaSelect.disabled = false;
-        }
+        if (match) categoriaSelect.value = match.categoria;
     });
 }
 onProductoInputChange('compraProductoInput', 'compraCategoriaInput');
@@ -177,7 +181,6 @@ document.getElementById('addCompraBtn').addEventListener('click', () => {
     document.getElementById('compraModalTitle').textContent = 'Nueva compra';
     document.getElementById('compraEstadoInput').value = 'recibido';
     document.getElementById('compraPagadoRow').style.display = 'none';
-    document.getElementById('compraCategoriaInput').disabled = false;
     document.getElementById('compraFechaInput').value = todayStr();
     resetSocioRows('compraSociosRows');
     openModal('compraModal');
@@ -189,7 +192,6 @@ document.getElementById('addReservaBtn').addEventListener('click', () => {
     document.getElementById('compraModalTitle').textContent = 'Nueva reserva / pedido';
     document.getElementById('compraEstadoInput').value = 'reservado';
     document.getElementById('compraPagadoRow').style.display = 'flex';
-    document.getElementById('compraCategoriaInput').disabled = false;
     document.getElementById('compraFechaInput').value = todayStr();
     resetSocioRows('compraSociosRows');
     openModal('compraModal');
@@ -207,9 +209,8 @@ function openEditCompra(id, clone = false) {
     document.getElementById('compraEstadoInput').value = c.estado;
     document.getElementById('compraPagadoRow').style.display = esReserva ? 'flex' : 'none';
     document.getElementById('compraProductoInput').value = productoNombre(c.producto_id);
-    const categoriaSelect = document.getElementById('compraCategoriaInput');
-    categoriaSelect.value = STATE.productos.find(p => p.id === c.producto_id)?.categoria || '';
-    categoriaSelect.disabled = true;
+    document.getElementById('compraCategoriaInput').value =
+        STATE.productos.find(p => p.id === c.producto_id)?.categoria || '';
     document.getElementById('compraTipoInput').value = c.tipo;
     document.getElementById('compraIdiomaInput').value = c.idioma || '';
     document.getElementById('compraCantidadInput').value = c.cantidad;
@@ -832,6 +833,7 @@ function renderSocios() {
 // ---------- Resumen / graficos ----------
 let categoriaChart = null;
 let socioChart = null;
+let estadosChart = null;
 
 function renderResumen() {
     const inventarioFiltrado = computeInventarioFiltrado();
@@ -843,6 +845,9 @@ function renderResumen() {
     const beneficio = resumenFiltrado.reduce((s, r) => s + (r.beneficio || 0), 0);
     const valorInventario = inventarioFiltrado.reduce((s, i) => s + (i.valor_disponible || 0), 0);
     const pendientePago = resumenFiltrado.reduce((s, r) => s + (r.pendiente_pago_compra || 0), 0);
+    const valorReservado = STATE.compras
+        .filter(c => c.estado === 'reservado')
+        .reduce((s, c) => s + c.precio_total * shareDeSocios(c.compra_socios), 0);
 
     document.getElementById('statValorInventario').textContent = formatCurrency(valorInventario);
     document.getElementById('statTotalComprado').textContent = formatCurrency(totalInvertido);
@@ -866,6 +871,20 @@ function renderResumen() {
         categoriaChart = new Chart(ctx1.getContext('2d'), {
             type: 'doughnut',
             data: { labels: catLabels, datasets: [{ data: catValues }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
+
+    // Grafico por estado (inventario / reservado / vendido)
+    const ctxE = document.getElementById('estadosChart');
+    if (estadosChart) estadosChart.destroy();
+    if (ctxE && window.Chart) {
+        estadosChart = new Chart(ctxE.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Inventario', 'Reservado', 'Vendido'],
+                datasets: [{ data: [valorInventario, valorReservado, totalVendido] }],
+            },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
         });
     }
@@ -1079,12 +1098,7 @@ function addPullRow(producto = '', categoria = 'Pokémon', cantidad = 1) {
     productoInput.addEventListener('input', () => {
         const match = STATE.productos.find(
             p => p.nombre.trim().toLowerCase() === productoInput.value.trim().toLowerCase());
-        if (match) {
-            categoriaSelect.value = match.categoria;
-            categoriaSelect.disabled = true;
-        } else {
-            categoriaSelect.disabled = false;
-        }
+        if (match) categoriaSelect.value = match.categoria;
     });
     row.querySelector('.remove-socio-row').addEventListener('click', () => row.remove());
     container.appendChild(row);
