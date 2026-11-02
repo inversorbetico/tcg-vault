@@ -114,6 +114,7 @@
                         <div class="stat-item"><span class="label">Comprado</span><span class="value" id="statTotalComprado">€0.00</span></div>
                         <div class="stat-item"><span class="label">Vendido</span><span class="value" id="statTotalVendido">€0.00</span></div>
                         <div class="stat-item"><span class="label">Beneficio</span><span class="value" id="statBeneficio">€0.00</span></div>
+                        <div class="stat-item"><span class="label">Valor en stock</span><span class="value" id="statValorStock">€0.00</span></div>
                         <div class="stat-item"><span class="label">Reservas pendientes de pago</span><span class="value" id="statPendientePago">€0.00</span></div>
                     </div>
                 </div>
@@ -254,7 +255,7 @@
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table">
-                        <thead><tr><th>Ref.</th><th>Fecha</th><th>Pagador</th><th class="text-right">Importe</th><th>Descripción</th></tr></thead>
+                        <thead><tr><th>Ref.</th><th>Fecha</th><th>Pagador</th><th class="text-right">Importe</th><th>Descripción</th><th></th></tr></thead>
                         <tbody id="pagosTableBody"></tbody>
                     </table>
                     </div>
@@ -288,6 +289,7 @@
                 <button class="close-modal" data-close="compraModal">&times;</button>
             </div>
             <form id="compraForm">
+                <input type="hidden" id="compraIdInput">
                 <input type="hidden" id="compraEstadoInput" value="recibido">
                 <div class="form-row">
                     <div class="form-group">
@@ -304,6 +306,7 @@
                             <option value="Magic: The Gathering">Magic: The Gathering</option>
                             <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
                             <option value="Naruto">Naruto</option>
+                            <option value="Cyberpunk">Cyberpunk</option>
                             <option value="Otros TCG">Otros TCG</option>
                         </select>
                     </div>
@@ -370,10 +373,11 @@
     <div id="ventaModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Nueva venta</h3>
+                <h3 id="ventaModalTitle">Nueva venta</h3>
                 <button class="close-modal" data-close="ventaModal">&times;</button>
             </div>
             <form id="ventaForm">
+                <input type="hidden" id="ventaIdInput">
                 <div class="form-group">
                     <label>Producto</label>
                     <input type="text" id="ventaProductoInput" list="productosList" required autocomplete="off">
@@ -530,10 +534,11 @@
     <div id="pagoModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Nuevo pago entre socios</h3>
+                <h3 id="pagoModalTitle">Nuevo pago entre socios</h3>
                 <button class="close-modal" data-close="pagoModal">&times;</button>
             </div>
             <form id="pagoForm">
+                <input type="hidden" id="pagoIdInput">
                 <div class="form-group">
                     <label>Pagador</label>
                     <select id="pagoPagadorInput" required></select>

@@ -173,6 +173,7 @@ onProductoInputChange('compraProductoInput', 'compraCategoriaInput');
 // ---------- Compras ----------
 document.getElementById('addCompraBtn').addEventListener('click', () => {
     document.getElementById('compraForm').reset();
+    document.getElementById('compraIdInput').value = '';
     document.getElementById('compraModalTitle').textContent = 'Nueva compra';
     document.getElementById('compraEstadoInput').value = 'recibido';
     document.getElementById('compraPagadoRow').style.display = 'none';
@@ -184,6 +185,7 @@ document.getElementById('addCompraBtn').addEventListener('click', () => {
 
 document.getElementById('addReservaBtn').addEventListener('click', () => {
     document.getElementById('compraForm').reset();
+    document.getElementById('compraIdInput').value = '';
     document.getElementById('compraModalTitle').textContent = 'Nueva reserva / pedido';
     document.getElementById('compraEstadoInput').value = 'reservado';
     document.getElementById('compraPagadoRow').style.display = 'flex';
@@ -192,6 +194,35 @@ document.getElementById('addReservaBtn').addEventListener('click', () => {
     resetSocioRows('compraSociosRows');
     openModal('compraModal');
 });
+
+function openEditCompra(id) {
+    const c = STATE.compras.find(x => String(x.id) === String(id));
+    if (!c) return;
+    document.getElementById('compraForm').reset();
+    document.getElementById('compraIdInput').value = c.id;
+    document.getElementById('compraModalTitle').textContent =
+        c.estado === 'reservado' ? 'Editar reserva / pedido' : 'Editar compra';
+    document.getElementById('compraEstadoInput').value = c.estado;
+    document.getElementById('compraPagadoRow').style.display = c.estado === 'reservado' ? 'flex' : 'none';
+    document.getElementById('compraProductoInput').value = productoNombre(c.producto_id);
+    const categoriaSelect = document.getElementById('compraCategoriaInput');
+    categoriaSelect.value = STATE.productos.find(p => p.id === c.producto_id)?.categoria || '';
+    categoriaSelect.disabled = true;
+    document.getElementById('compraTipoInput').value = c.tipo;
+    document.getElementById('compraIdiomaInput').value = c.idioma || '';
+    document.getElementById('compraCantidadInput').value = c.cantidad;
+    document.getElementById('compraPrecioInput').value = c.precio_unitario;
+    document.getElementById('compraProveedorInput').value = c.proveedor || '';
+    document.getElementById('compraFechaInput').value = c.fecha || todayStr();
+    document.getElementById('compraPagadoInput').value = c.importe_pagado || 0;
+    document.getElementById('compraComentariosInput').value = c.comentarios || '';
+
+    document.getElementById('compraSociosRows').innerHTML = '';
+    const socios = c.compra_socios && c.compra_socios.length ? c.compra_socios : [{ socio_id: STATE.socios[0]?.id, porcentaje: 100 }];
+    socios.forEach(s => addSocioRow('compraSociosRows', s.socio_id, s.porcentaje));
+
+    openModal('compraModal');
+}
 
 document.getElementById('compraAddSocioBtn').addEventListener('click', () => {
     const used = getSocioRows('compraSociosRows').map(r => r.socio_id);
@@ -226,10 +257,22 @@ document.getElementById('compraForm').addEventListener('submit', async (e) => {
               parseFloat(document.getElementById('compraPrecioInput').value),
         comentarios: document.getElementById('compraComentariosInput').value || null,
     };
-    const { data: compra, error } = await sb.from('compras').insert(vals).select().single();
-    if (error) { alert('Error guardando compra: ' + error.message); return; }
 
-    const socioPayload = rows.map(r => ({ ...r, compra_id: compra.id }));
+    const editId = document.getElementById('compraIdInput').value;
+    let compraId;
+    if (editId) {
+        const { error } = await sb.from('compras').update(vals).eq('id', editId);
+        if (error) { alert('Error actualizando compra: ' + error.message); return; }
+        compraId = editId;
+        const { error: errDel } = await sb.from('compra_socios').delete().eq('compra_id', compraId);
+        if (errDel) { alert('Error actualizando reparto: ' + errDel.message); return; }
+    } else {
+        const { data: compra, error } = await sb.from('compras').insert(vals).select().single();
+        if (error) { alert('Error guardando compra: ' + error.message); return; }
+        compraId = compra.id;
+    }
+
+    const socioPayload = rows.map(r => ({ ...r, compra_id: compraId }));
     const { error: err2 } = await sb.from('compra_socios').insert(socioPayload);
     if (err2) { alert('Error guardando reparto: ' + err2.message); return; }
 
@@ -342,9 +385,15 @@ function renderCompras() {
             <td class="text-right">${formatCurrency(c.precio_total)}</td>
             <td>${socios}</td>
             <td><span class="pl-badge positive">Recibido</span></td>
-            <td><button class="icon-btn delete-compra" data-id="${c.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button></td>
+            <td>
+                <button class="icon-btn edit-compra" data-id="${c.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn delete-compra" data-id="${c.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+            </td>
         `;
         tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.edit-compra').forEach(btn => {
+        btn.addEventListener('click', () => openEditCompra(btn.dataset.id));
     });
     tbody.querySelectorAll('.delete-compra').forEach(btn => {
         btn.addEventListener('click', () => deleteCompra(btn.dataset.id));
@@ -369,10 +418,14 @@ function renderReservas() {
             <td>${socios}</td>
             <td>
                 <button class="icon-btn receive-compra" data-id="${c.id}" title="Marcar recibido"><span class="material-symbols-outlined" style="font-size:16px;">inventory_2</span></button>
+                <button class="icon-btn edit-compra" data-id="${c.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
                 <button class="icon-btn delete-compra" data-id="${c.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
             </td>
         `;
         tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.edit-compra').forEach(btn => {
+        btn.addEventListener('click', () => openEditCompra(btn.dataset.id));
     });
     tbody.querySelectorAll('.delete-compra').forEach(btn => {
         btn.addEventListener('click', () => deleteCompra(btn.dataset.id));
@@ -407,10 +460,34 @@ onProductoInputChange('ventaProductoInput', null);
 
 document.getElementById('addVentaBtn').addEventListener('click', () => {
     document.getElementById('ventaForm').reset();
+    document.getElementById('ventaIdInput').value = '';
+    document.getElementById('ventaModalTitle').textContent = 'Nueva venta';
     document.getElementById('ventaFechaInput').value = todayStr();
     resetSocioRows('ventaSociosRows');
     openModal('ventaModal');
 });
+
+function openEditVenta(id) {
+    const v = STATE.ventas.find(x => String(x.id) === String(id));
+    if (!v) return;
+    document.getElementById('ventaForm').reset();
+    document.getElementById('ventaIdInput').value = v.id;
+    document.getElementById('ventaModalTitle').textContent = 'Editar venta';
+    document.getElementById('ventaProductoInput').value = productoNombre(v.producto_id);
+    document.getElementById('ventaCantidadInput').value = v.cantidad;
+    document.getElementById('ventaCosteInput').value = v.precio_compra_base;
+    document.getElementById('ventaPrecioInput').value = v.precio_venta;
+    document.getElementById('ventaFechaInput').value = v.fecha || todayStr();
+    document.getElementById('ventaCanalInput').value = v.canal;
+    document.getElementById('ventaCobradoInput').value = v.cobrado ? 'true' : 'false';
+    document.getElementById('ventaComentariosInput').value = v.comentarios || '';
+
+    document.getElementById('ventaSociosRows').innerHTML = '';
+    const socios = v.venta_socios && v.venta_socios.length ? v.venta_socios : [{ socio_id: STATE.socios[0]?.id, porcentaje: 100 }];
+    socios.forEach(s => addSocioRow('ventaSociosRows', s.socio_id, s.porcentaje));
+
+    openModal('ventaModal');
+}
 
 document.getElementById('ventaAddSocioBtn').addEventListener('click', () => {
     const used = getSocioRows('ventaSociosRows').map(r => r.socio_id);
@@ -442,10 +519,21 @@ document.getElementById('ventaForm').addEventListener('submit', async (e) => {
         cobrado: document.getElementById('ventaCobradoInput').value === 'true',
         comentarios: document.getElementById('ventaComentariosInput').value || null,
     };
-    const { data: venta, error } = await sb.from('ventas').insert(vals).select().single();
-    if (error) { alert('Error guardando venta: ' + error.message); return; }
+    const editId = document.getElementById('ventaIdInput').value;
+    let ventaId;
+    if (editId) {
+        const { error } = await sb.from('ventas').update(vals).eq('id', editId);
+        if (error) { alert('Error actualizando venta: ' + error.message); return; }
+        ventaId = editId;
+        const { error: errDel } = await sb.from('venta_socios').delete().eq('venta_id', ventaId);
+        if (errDel) { alert('Error actualizando reparto: ' + errDel.message); return; }
+    } else {
+        const { data: venta, error } = await sb.from('ventas').insert(vals).select().single();
+        if (error) { alert('Error guardando venta: ' + error.message); return; }
+        ventaId = venta.id;
+    }
 
-    const socioPayload = rows.map(r => ({ ...r, venta_id: venta.id }));
+    const socioPayload = rows.map(r => ({ ...r, venta_id: ventaId }));
     const { error: err2 } = await sb.from('venta_socios').insert(socioPayload);
     if (err2) { alert('Error guardando reparto: ' + err2.message); return; }
 
@@ -461,8 +549,9 @@ function renderVentas() {
         const socios = (v.venta_socios || [])
             .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
         const costeTotal = (v.precio_compra_base || 0) * (v.cantidad || 0);
-        const margen = costeTotal > 0
-            ? ((v.precio_total_venta - costeTotal) / costeTotal) * 100
+        const beneficioVenta = (v.precio_total_venta || 0) - costeTotal;
+        const margen = v.precio_total_venta > 0
+            ? (beneficioVenta / v.precio_total_venta) * 100
             : 0;
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -476,9 +565,15 @@ function renderVentas() {
             <td>${v.canal}</td>
             <td>${v.cobrado ? '<span class="pl-badge positive">Sí</span>' : '<span class="pl-badge negative">Pendiente</span>'}</td>
             <td>${socios}</td>
-            <td><button class="icon-btn delete-venta" data-id="${v.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button></td>
+            <td>
+                <button class="icon-btn edit-venta" data-id="${v.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn delete-venta" data-id="${v.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+            </td>
         `;
         tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.edit-venta').forEach(btn => {
+        btn.addEventListener('click', () => openEditVenta(btn.dataset.id));
     });
     tbody.querySelectorAll('.delete-venta').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -518,10 +613,26 @@ function fillPagadorSelect() {
 
 document.getElementById('addPagoBtn').addEventListener('click', () => {
     document.getElementById('pagoForm').reset();
+    document.getElementById('pagoIdInput').value = '';
+    document.getElementById('pagoModalTitle').textContent = 'Nuevo pago entre socios';
     document.getElementById('pagoFechaInput').value = todayStr();
     fillPagadorSelect();
     openModal('pagoModal');
 });
+
+function openEditPago(id) {
+    const p = STATE.pagos.find(x => String(x.id) === String(id));
+    if (!p) return;
+    document.getElementById('pagoForm').reset();
+    document.getElementById('pagoIdInput').value = p.id;
+    document.getElementById('pagoModalTitle').textContent = 'Editar pago';
+    fillPagadorSelect();
+    document.getElementById('pagoPagadorInput').value = p.pagador_id;
+    document.getElementById('pagoImporteInput').value = p.importe;
+    document.getElementById('pagoFechaInput').value = p.fecha || todayStr();
+    document.getElementById('pagoDescripcionInput').value = p.descripcion || '';
+    openModal('pagoModal');
+}
 
 document.getElementById('pagoForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -531,7 +642,10 @@ document.getElementById('pagoForm').addEventListener('submit', async (e) => {
         fecha: document.getElementById('pagoFechaInput').value,
         descripcion: document.getElementById('pagoDescripcionInput').value || null,
     };
-    const { error } = await sb.from('pagos').insert(vals);
+    const editId = document.getElementById('pagoIdInput').value;
+    const { error } = editId
+        ? await sb.from('pagos').update(vals).eq('id', editId)
+        : await sb.from('pagos').insert(vals);
     if (error) { alert('Error guardando pago: ' + error.message); return; }
     closeModal('pagoModal');
     await loadAll();
@@ -549,8 +663,24 @@ function renderPagos() {
             <td>${socioNombre(p.pagador_id)}</td>
             <td class="text-right">${formatCurrency(p.importe)}</td>
             <td>${p.descripcion || '-'}</td>
+            <td>
+                <button class="icon-btn edit-pago" data-id="${p.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
+                <button class="icon-btn delete-pago" data-id="${p.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
+            </td>
         `;
         tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.edit-pago').forEach(btn => {
+        btn.addEventListener('click', () => openEditPago(btn.dataset.id));
+    });
+    tbody.querySelectorAll('.delete-pago').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar este pago?')) return;
+            const { error } = await sb.from('pagos').delete().eq('id', btn.dataset.id);
+            if (error) { alert('Error: ' + error.message); return; }
+            await loadAll();
+            renderAll();
+        });
     });
 }
 
@@ -592,6 +722,7 @@ function renderResumen() {
     document.getElementById('statTotalComprado').textContent = formatCurrency(totalInvertido);
     document.getElementById('statTotalVendido').textContent = formatCurrency(totalVendido);
     document.getElementById('statBeneficio').textContent = formatCurrency(beneficio);
+    document.getElementById('statValorStock').textContent = formatCurrency(valorInventario);
     document.getElementById('statPendientePago').textContent = formatCurrency(pendientePago);
 
     // Grafico por categoria
@@ -789,6 +920,7 @@ function addPullRow(producto = '', categoria = 'Pokémon', cantidad = 1) {
                 <option value="Magic: The Gathering">Magic: The Gathering</option>
                 <option value="Yu-Gi-Oh!">Yu-Gi-Oh!</option>
                 <option value="Naruto">Naruto</option>
+                <option value="Cyberpunk">Cyberpunk</option>
                 <option value="Otros TCG">Otros TCG</option>
             </select>
         </div>
