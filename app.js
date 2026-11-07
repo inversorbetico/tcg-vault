@@ -131,8 +131,34 @@ function addSocioRow(containerId, socioId, porcentaje) {
             <span class="material-symbols-outlined">remove_circle</span>
         </button>
     `;
-    row.querySelector('.remove-socio-row').addEventListener('click', () => row.remove());
+    row.querySelector('.remove-socio-row').addEventListener('click', () => {
+        row.remove();
+        onSocioRowsChanged(containerId);
+    });
     container.appendChild(row);
+    onSocioRowsChanged(containerId);
+}
+
+function onSocioRowsChanged(containerId) {
+    if (containerId === 'compraSociosRows') syncPagadoPorVisibility();
+}
+
+function fillPagadoPorSelect(selected) {
+    const select = document.getElementById('compraPagadoPorInput');
+    select.innerHTML = '<option value="">Sin especificar (no generar deuda)</option>' + socioOptionsHtml(selected);
+}
+
+function syncPagadoPorVisibility() {
+    const rows = getSocioRows('compraSociosRows');
+    const row = document.getElementById('compraPagadoPorRow');
+    if (rows.length > 1) {
+        const current = document.getElementById('compraPagadoPorInput').value;
+        fillPagadoPorSelect(current ? parseInt(current, 10) : null);
+        row.style.display = '';
+    } else {
+        row.style.display = 'none';
+        document.getElementById('compraPagadoPorInput').value = '';
+    }
 }
 
 function resetSocioRows(containerId) {
@@ -182,11 +208,18 @@ function onProductoInputChange(inputId, categoriaSelectId) {
 onProductoInputChange('compraProductoInput', 'compraCategoriaInput');
 
 // ---------- Compras ----------
+document.getElementById('compraPreorderInput').addEventListener('change', (e) => {
+    const esReserva = e.target.checked;
+    document.getElementById('compraEstadoInput').value = esReserva ? 'reservado' : 'recibido';
+    document.getElementById('compraPagadoRow').style.display = esReserva ? 'flex' : 'none';
+});
+
 document.getElementById('addCompraBtn').addEventListener('click', () => {
     document.getElementById('compraForm').reset();
     document.getElementById('compraIdInput').value = '';
     document.getElementById('compraModalTitle').textContent = 'Nueva compra';
     document.getElementById('compraEstadoInput').value = 'recibido';
+    document.getElementById('compraPreorderInput').checked = false;
     document.getElementById('compraPagadoRow').style.display = 'none';
     document.getElementById('compraFechaInput').value = todayStr();
     resetSocioRows('compraSociosRows');
@@ -198,6 +231,7 @@ document.getElementById('addReservaBtn').addEventListener('click', () => {
     document.getElementById('compraIdInput').value = '';
     document.getElementById('compraModalTitle').textContent = 'Nueva reserva / pedido';
     document.getElementById('compraEstadoInput').value = 'reservado';
+    document.getElementById('compraPreorderInput').checked = true;
     document.getElementById('compraPagadoRow').style.display = 'flex';
     document.getElementById('compraFechaInput').value = todayStr();
     resetSocioRows('compraSociosRows');
@@ -214,6 +248,7 @@ function openEditCompra(id, clone = false) {
         ? (esReserva ? 'Nueva reserva / pedido (clonada)' : 'Nueva compra (clonada)')
         : (esReserva ? 'Editar reserva / pedido' : 'Editar compra');
     document.getElementById('compraEstadoInput').value = c.estado;
+    document.getElementById('compraPreorderInput').checked = esReserva;
     document.getElementById('compraPagadoRow').style.display = esReserva ? 'flex' : 'none';
     document.getElementById('compraProductoInput').value = productoNombre(c.producto_id);
     document.getElementById('compraCategoriaInput').value =
@@ -230,6 +265,7 @@ function openEditCompra(id, clone = false) {
     document.getElementById('compraSociosRows').innerHTML = '';
     const socios = c.compra_socios && c.compra_socios.length ? c.compra_socios : [{ socio_id: STATE.socios[0]?.id, porcentaje: 100 }];
     socios.forEach(s => addSocioRow('compraSociosRows', s.socio_id, s.porcentaje));
+    document.getElementById('compraPagadoPorInput').value = c.pagado_por || '';
 
     openModal('compraModal');
 }
@@ -266,6 +302,9 @@ document.getElementById('compraForm').addEventListener('submit', async (e) => {
             : parseFloat(document.getElementById('compraCantidadInput').value) *
               parseFloat(document.getElementById('compraPrecioInput').value),
         comentarios: document.getElementById('compraComentariosInput').value || null,
+        pagado_por: rows.length > 1
+            ? (parseInt(document.getElementById('compraPagadoPorInput').value, 10) || null)
+            : null,
     };
 
     const editId = document.getElementById('compraIdInput').value;
@@ -806,14 +845,33 @@ function fillPagadorSelect() {
     document.getElementById('pagoPagadorInput').innerHTML = socioOptionsHtml(null);
 }
 
+function fillDestinatarioSelect(selected) {
+    document.getElementById('pagoDestinatarioInput').innerHTML =
+        '<option value="">Fondo común / sin especificar</option>' + socioOptionsHtml(selected);
+}
+
 document.getElementById('addPagoBtn').addEventListener('click', () => {
     document.getElementById('pagoForm').reset();
     document.getElementById('pagoIdInput').value = '';
-    document.getElementById('pagoModalTitle').textContent = 'Nuevo pago entre socios';
+    document.getElementById('pagoModalTitle').textContent = 'Nuevo pago';
     document.getElementById('pagoFechaInput').value = todayStr();
     fillPagadorSelect();
+    fillDestinatarioSelect(null);
     openModal('pagoModal');
 });
+
+function abrirSaldarDeuda(deudorId, acreedorId, monto) {
+    document.getElementById('pagoForm').reset();
+    document.getElementById('pagoIdInput').value = '';
+    document.getElementById('pagoModalTitle').textContent = 'Saldar deuda';
+    fillPagadorSelect();
+    fillDestinatarioSelect(acreedorId);
+    document.getElementById('pagoPagadorInput').value = deudorId;
+    document.getElementById('pagoImporteInput').value = monto.toFixed(2);
+    document.getElementById('pagoFechaInput').value = todayStr();
+    document.getElementById('pagoDescripcionInput').value = 'Liquidación de deuda';
+    openModal('pagoModal');
+}
 
 function openEditPago(id, clone = false) {
     const p = STATE.pagos.find(x => String(x.id) === String(id));
@@ -822,6 +880,7 @@ function openEditPago(id, clone = false) {
     document.getElementById('pagoIdInput').value = clone ? '' : p.id;
     document.getElementById('pagoModalTitle').textContent = clone ? 'Nuevo pago (clonado)' : 'Editar pago';
     fillPagadorSelect();
+    fillDestinatarioSelect(p.destinatario_id || null);
     document.getElementById('pagoPagadorInput').value = p.pagador_id;
     document.getElementById('pagoImporteInput').value = p.importe;
     document.getElementById('pagoFechaInput').value = clone ? todayStr() : (p.fecha || todayStr());
@@ -833,6 +892,7 @@ document.getElementById('pagoForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const vals = {
         pagador_id: parseInt(document.getElementById('pagoPagadorInput').value, 10),
+        destinatario_id: parseInt(document.getElementById('pagoDestinatarioInput').value, 10) || null,
         importe: parseFloat(document.getElementById('pagoImporteInput').value),
         fecha: document.getElementById('pagoFechaInput').value,
         descripcion: document.getElementById('pagoDescripcionInput').value || null,
@@ -847,7 +907,75 @@ document.getElementById('pagoForm').addEventListener('submit', async (e) => {
     renderAll();
 });
 
+// ---------- Deudas entre socios (estilo Tricount) ----------
+function computeDeudas() {
+    const debe = {}; // `${deudorId}_${acreedorId}` -> importe acumulado (sin netear)
+    const add = (deudorId, acreedorId, monto) => {
+        if (!deudorId || !acreedorId || deudorId === acreedorId || !(monto > 0)) return;
+        const key = `${deudorId}_${acreedorId}`;
+        debe[key] = (debe[key] || 0) + monto;
+    };
+
+    STATE.compras.forEach(c => {
+        if (!c.pagado_por) return;
+        const base = c.estado === 'reservado' ? (c.importe_pagado || 0) : (c.precio_total || 0);
+        (c.compra_socios || []).forEach(s => {
+            if (s.socio_id === c.pagado_por) return;
+            add(s.socio_id, c.pagado_por, base * s.porcentaje / 100);
+        });
+    });
+
+    STATE.pagos.forEach(p => {
+        if (!p.destinatario_id) return;
+        // Un pago de X a Y cancela (parte de) lo que X le debe a Y.
+        add(p.destinatario_id, p.pagador_id, p.importe);
+    });
+
+    const pares = [];
+    const vistos = new Set();
+    STATE.socios.forEach(s1 => {
+        STATE.socios.forEach(s2 => {
+            if (s1.id >= s2.id) return;
+            const key = `${s1.id}-${s2.id}`;
+            if (vistos.has(key)) return;
+            vistos.add(key);
+            const neto = (debe[`${s1.id}_${s2.id}`] || 0) - (debe[`${s2.id}_${s1.id}`] || 0);
+            if (Math.abs(neto) < 0.01) return;
+            pares.push({
+                deudorId: neto > 0 ? s1.id : s2.id,
+                acreedorId: neto > 0 ? s2.id : s1.id,
+                monto: Math.abs(neto),
+            });
+        });
+    });
+    return pares;
+}
+
+function renderDeudasResumen() {
+    const container = document.getElementById('deudasResumen');
+    const pares = computeDeudas();
+    if (!pares.length) {
+        container.innerHTML = '<p style="color:var(--text-secondary); margin:0;">No hay deudas pendientes entre socios.</p>';
+        return;
+    }
+    container.innerHTML = pares.map(p => `
+        <div class="breakdown-item">
+            <span class="bd-label">${socioNombre(p.deudorId)} debe a ${socioNombre(p.acreedorId)}</span>
+            <span class="bd-value">${formatCurrency(p.monto)}</span>
+            <button type="button" class="icon-btn saldar-deuda" data-deudor="${p.deudorId}" data-acreedor="${p.acreedorId}" data-monto="${p.monto}" title="Saldar">
+                <span class="material-symbols-outlined" style="font-size:18px;">task_alt</span>
+            </button>
+        </div>
+    `).join('');
+    container.querySelectorAll('.saldar-deuda').forEach(btn => {
+        btn.addEventListener('click', () => {
+            abrirSaldarDeuda(parseInt(btn.dataset.deudor, 10), parseInt(btn.dataset.acreedor, 10), parseFloat(btn.dataset.monto));
+        });
+    });
+}
+
 function renderPagos() {
+    renderDeudasResumen();
     const tbody = document.getElementById('pagosTableBody');
     tbody.innerHTML = '';
     let rows = STATE.pagos.filter(p => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(p.pagador_id));
@@ -855,6 +983,7 @@ function renderPagos() {
         referencia: p => p.referencia,
         fecha: p => p.fecha,
         pagador: p => socioNombre(p.pagador_id),
+        destinatario: p => p.destinatario_id ? socioNombre(p.destinatario_id) : '',
         importe: p => p.importe,
         descripcion: p => p.descripcion,
     });
@@ -864,6 +993,7 @@ function renderPagos() {
             <td>${p.referencia}</td>
             <td>${p.fecha || '-'}</td>
             <td>${socioNombre(p.pagador_id)}</td>
+            <td>${p.destinatario_id ? socioNombre(p.destinatario_id) : '<span style="color:var(--text-secondary);">Fondo común</span>'}</td>
             <td class="text-right">${formatCurrency(p.importe)}</td>
             <td>${p.descripcion || '-'}</td>
             <td>

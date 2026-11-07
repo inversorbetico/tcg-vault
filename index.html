@@ -79,7 +79,7 @@
                 </a>
                 <a href="#" class="nav-item" id="navPagos">
                     <span class="material-symbols-outlined">currency_exchange</span>
-                    <span>Pagos entre socios</span>
+                    <span>Deudas</span>
                 </a>
                 <a href="#" class="nav-item" id="navSocios">
                     <span class="material-symbols-outlined">groups</span>
@@ -283,13 +283,17 @@
             <!-- Pagos entre socios -->
             <div id="pagosView" class="view-section" style="display:none;">
                 <div class="card glass-panel">
+                    <div class="card-header"><h3>Balance entre socios</h3></div>
+                    <div id="deudasResumen" class="breakdown-list"></div>
+                </div>
+                <div class="card glass-panel">
                     <div class="card-header">
-                        <h3>Pagos entre socios</h3>
+                        <h3>Pagos / liquidaciones</h3>
                         <button class="primary-btn" id="addPagoBtn"><span class="material-symbols-outlined">add</span> Nuevo pago</button>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="pagosTable">
-                        <thead><tr><th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="pagador">Pagador</th><th class="text-right" data-sort="importe">Importe</th><th data-sort="descripcion">Descripción</th><th></th></tr></thead>
+                        <thead><tr><th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="pagador">Pagador</th><th data-sort="destinatario">A quién</th><th class="text-right" data-sort="importe">Importe</th><th data-sort="descripcion">Descripción</th><th></th></tr></thead>
                         <tbody id="pagosTableBody"></tbody>
                     </table>
                     </div>
@@ -385,6 +389,10 @@
                         <input type="date" id="compraFechaInput" required>
                     </div>
                 </div>
+                <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="compraPreorderInput" style="width:auto;">
+                    <label for="compraPreorderInput" style="margin:0;">Es un pre-order / reserva (pago parcial, aún sin recibir)</label>
+                </div>
                 <div class="form-row" id="compraPagadoRow" style="display:none;">
                     <div class="form-group">
                         <label>Importe ya pagado (€)</label>
@@ -402,6 +410,13 @@
                     <button type="button" class="icon-btn" id="compraAddSocioBtn" title="Añadir socio">
                         <span class="material-symbols-outlined">add_circle</span> Añadir socio
                     </button>
+                </div>
+
+                <div class="form-group" id="compraPagadoPorRow" style="display:none;">
+                    <label>¿Quién ha pagado?</label>
+                    <select id="compraPagadoPorInput">
+                        <option value="">Sin especificar (no generar deuda)</option>
+                    </select>
                 </div>
 
                 <button type="submit" class="submit-btn">Guardar</button>
@@ -579,9 +594,17 @@
             </div>
             <form id="pagoForm">
                 <input type="hidden" id="pagoIdInput">
-                <div class="form-group">
-                    <label>Pagador</label>
-                    <select id="pagoPagadorInput" required></select>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>¿Quién paga?</label>
+                        <select id="pagoPagadorInput" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>¿A quién le paga?</label>
+                        <select id="pagoDestinatarioInput">
+                            <option value="">Fondo común / sin especificar</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -604,7 +627,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=7"></script>
-    <script src="app.js?v=7"></script>
+    <script src="config.js?v=8"></script>
+    <script src="app.js?v=8"></script>
 </body>
 </html>
