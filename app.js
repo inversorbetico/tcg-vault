@@ -18,9 +18,16 @@ const formatCurrency = (val) =>
     new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(val || 0);
 const todayStr = () => new Date().toISOString().split('T')[0];
 
+let MI_SOCIO_ID = null; // identidad de quien ha entrado
+const SOCIO_APODOS = { 'Guillermo Garzón': 'Guillermo Bético' };
+
 function socioNombre(id) {
     const s = STATE.socios.find(s => s.id === id);
     return s ? s.nombre : '-';
+}
+
+function socioApodo(socio) {
+    return SOCIO_APODOS[socio.nombre] || socio.nombre;
 }
 
 // ---------- Carga de datos ----------
@@ -284,48 +291,82 @@ document.getElementById('compraForm').addEventListener('submit', async (e) => {
     renderAll();
 });
 
-// ---------- Filtro por socio(s) ----------
-let FILTRO_SOCIOS = []; // vacio = todos los socios
+// ---------- Filtro por grupo exacto de propietarios ----------
+// FILTRO_SOCIOS = ids (ordenados) del grupo exacto que se esta viendo.
+// A diferencia de un filtro "inclusivo", un item solo cuenta si su reparto
+// de socios coincide EXACTAMENTE con el grupo seleccionado (ni mas ni menos).
+let FILTRO_SOCIOS = [];
+
+function grupoDeReparto(repartoRows) {
+    return (repartoRows || []).map(r => r.socio_id).slice().sort((a, b) => a - b);
+}
+
+function gruposIguales(a, b) {
+    if (a.length !== b.length) return false;
+    const setB = new Set(b);
+    return a.every(id => setB.has(id));
+}
+
+function etiquetaGrupo(ids) {
+    const todos = STATE.socios.map(s => s.id).sort((a, b) => a - b);
+    if (ids.length === 1 && ids[0] === MI_SOCIO_ID) return 'Solo yo';
+    if (gruposIguales(ids, todos)) return 'TCG PRO INVESTORS';
+    const otros = ids.filter(id => id !== MI_SOCIO_ID).map(id => socioNombre(id));
+    return ids.includes(MI_SOCIO_ID) ? [...otros, 'yo'].join(' + ') : otros.join(' + ');
+}
+
+function gruposDisponibles() {
+    const mapa = new Map();
+    const add = (repartoRows) => {
+        const ids = grupoDeReparto(repartoRows);
+        if (!ids.length || !ids.includes(MI_SOCIO_ID)) return;
+        mapa.set(ids.join(','), ids);
+    };
+    STATE.compras.forEach(c => add(c.compra_socios));
+    STATE.ventas.forEach(v => add(v.venta_socios));
+
+    if (MI_SOCIO_ID != null) {
+        const soloYo = [MI_SOCIO_ID];
+        if (!mapa.has(soloYo.join(','))) mapa.set(soloYo.join(','), soloYo);
+        const todos = STATE.socios.map(s => s.id).sort((a, b) => a - b);
+        if (todos.includes(MI_SOCIO_ID) && !mapa.has(todos.join(','))) mapa.set(todos.join(','), todos);
+    }
+
+    return Array.from(mapa.values()).sort((a, b) => a.length - b.length || a.join(',').localeCompare(b.join(',')));
+}
 
 function initSocioFilter() {
     const dropdown = document.getElementById('socioFilterDropdown');
-    dropdown.innerHTML = STATE.socios.map(s => `
+    const grupos = gruposDisponibles();
+    if (!FILTRO_SOCIOS.length && MI_SOCIO_ID != null) FILTRO_SOCIOS = [MI_SOCIO_ID];
+    dropdown.innerHTML = grupos.map(ids => `
         <label class="dropdown-item" style="cursor:pointer;">
-            <input type="checkbox" class="socio-filter-checkbox" value="${s.id}" style="margin-right:8px;">
-            <span class="pf-name">${s.nombre}</span>
+            <input type="radio" name="grupo-filter" class="grupo-filter-radio" value="${ids.join(',')}" style="margin-right:8px;" ${gruposIguales(ids, FILTRO_SOCIOS) ? 'checked' : ''}>
+            <span class="pf-name">${etiquetaGrupo(ids)}</span>
         </label>
     `).join('');
-    dropdown.querySelectorAll('.socio-filter-checkbox').forEach(cb => {
-        cb.addEventListener('change', () => {
-            FILTRO_SOCIOS = Array.from(dropdown.querySelectorAll('.socio-filter-checkbox:checked'))
-                .map(c => parseInt(c.value, 10));
+    dropdown.querySelectorAll('.grupo-filter-radio').forEach(radio => {
+        radio.addEventListener('change', () => {
+            FILTRO_SOCIOS = radio.value.split(',').map(s => parseInt(s, 10));
             updateSocioFilterLabel();
             renderAll();
         });
     });
+    updateSocioFilterLabel();
 }
 
 function updateSocioFilterLabel() {
     const label = document.getElementById('socioFilterText');
-    if (!FILTRO_SOCIOS.length) {
-        label.textContent = 'Todos los socios';
-    } else {
-        const nombres = FILTRO_SOCIOS.map(id => socioNombre(id));
-        label.textContent = nombres.length > 1 ? `${nombres.length} socios` : nombres[0];
-    }
+    label.textContent = FILTRO_SOCIOS.length ? etiquetaGrupo(FILTRO_SOCIOS) : 'Todos los socios';
 }
 
 function shareDeSocios(repartoRows) {
     if (!FILTRO_SOCIOS.length) return 1;
-    const total = (repartoRows || [])
-        .filter(r => FILTRO_SOCIOS.includes(r.socio_id))
-        .reduce((sum, r) => sum + r.porcentaje, 0);
-    return total / 100;
+    return gruposIguales(grupoDeReparto(repartoRows), FILTRO_SOCIOS) ? 1 : 0;
 }
 
 function incluyeAlgunSocio(repartoRows) {
-    if (!FILTRO_SOCIOS.length) return true;
-    return (repartoRows || []).some(r => FILTRO_SOCIOS.includes(r.socio_id));
+    return shareDeSocios(repartoRows) > 0;
 }
 
 function computeInventarioFiltrado() {
@@ -1253,6 +1294,7 @@ function renderRips() {
 
 // ---------- Render global ----------
 function renderAll() {
+    initSocioFilter();
     refreshProductosDatalist();
     renderCompras();
     renderReservas();
@@ -1301,13 +1343,46 @@ NAVS.forEach(n => {
     });
 });
 
-// ---------- PIN de acceso ----------
-async function iniciarApp() {
+// ---------- PIN de acceso e identidad ----------
+function mostrarApp() {
     document.getElementById('pinGate').style.display = 'none';
+    document.getElementById('identityGate').style.display = 'none';
     document.getElementById('app').style.display = '';
-    await loadAll();
-    initSocioFilter();
+    const usuarioText = document.getElementById('usuarioActualText');
+    if (usuarioText && MI_SOCIO_ID != null) {
+        usuarioText.textContent = socioApodo(STATE.socios.find(s => s.id === MI_SOCIO_ID) || {});
+    }
     renderAll();
+}
+
+async function afterPinOk() {
+    document.getElementById('pinGate').style.display = 'none';
+    await loadAll();
+    const miId = localStorage.getItem('tcgvault_mi_socio_id');
+    if (miId && STATE.socios.some(s => s.id === parseInt(miId, 10))) {
+        MI_SOCIO_ID = parseInt(miId, 10);
+        FILTRO_SOCIOS = [MI_SOCIO_ID];
+        mostrarApp();
+    } else {
+        mostrarSelectorIdentidad();
+    }
+}
+
+function mostrarSelectorIdentidad() {
+    document.getElementById('identityGate').style.display = 'flex';
+    const container = document.getElementById('identityButtons');
+    container.innerHTML = STATE.socios.map(s =>
+        `<button type="button" class="submit-btn identity-btn" data-id="${s.id}">${socioApodo(s)}</button>`
+    ).join('');
+    container.querySelectorAll('.identity-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = parseInt(btn.dataset.id, 10);
+            localStorage.setItem('tcgvault_mi_socio_id', String(id));
+            MI_SOCIO_ID = id;
+            FILTRO_SOCIOS = [id];
+            mostrarApp();
+        });
+    });
 }
 
 document.getElementById('pinForm').addEventListener('submit', (e) => {
@@ -1315,7 +1390,7 @@ document.getElementById('pinForm').addEventListener('submit', (e) => {
     const val = document.getElementById('pinInput').value.trim();
     if (val === window.APP_PIN) {
         localStorage.setItem('tcgvault_pin_ok', 'true');
-        iniciarApp();
+        afterPinOk();
     } else {
         document.getElementById('pinError').style.display = 'block';
         document.getElementById('pinInput').value = '';
@@ -1323,7 +1398,12 @@ document.getElementById('pinForm').addEventListener('submit', (e) => {
     }
 });
 
+document.getElementById('cambiarUsuarioBtn').addEventListener('click', () => {
+    localStorage.removeItem('tcgvault_mi_socio_id');
+    location.reload();
+});
+
 // ---------- Inicio ----------
 if (localStorage.getItem('tcgvault_pin_ok') === 'true') {
-    iniciarApp();
+    afterPinOk();
 }
