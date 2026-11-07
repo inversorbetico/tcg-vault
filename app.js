@@ -182,7 +182,7 @@ function syncVendidoPorVisibility() {
 
 function resetSocioRows(containerId) {
     document.getElementById(containerId).innerHTML = '';
-    addSocioRow(containerId, STATE.socios[0]?.id, 100);
+    addSocioRow(containerId, MI_SOCIO_ID || STATE.socios[0]?.id, 100);
 }
 
 function getSocioRows(containerId) {
@@ -282,7 +282,7 @@ function openEditCompra(id, clone = false) {
     document.getElementById('compraComentariosInput').value = c.comentarios || '';
 
     document.getElementById('compraSociosRows').innerHTML = '';
-    const socios = c.compra_socios && c.compra_socios.length ? c.compra_socios : [{ socio_id: STATE.socios[0]?.id, porcentaje: 100 }];
+    const socios = c.compra_socios && c.compra_socios.length ? c.compra_socios : [{ socio_id: MI_SOCIO_ID || STATE.socios[0]?.id, porcentaje: 100 }];
     socios.forEach(s => addSocioRow('compraSociosRows', s.socio_id, s.porcentaje));
     document.getElementById('compraPagadoPorInput').value = c.pagado_por || '';
 
@@ -663,7 +663,7 @@ function openEditVenta(id, clone = false) {
     document.getElementById('ventaComentariosInput').value = v.comentarios || '';
 
     document.getElementById('ventaSociosRows').innerHTML = '';
-    const socios = v.venta_socios && v.venta_socios.length ? v.venta_socios : [{ socio_id: STATE.socios[0]?.id, porcentaje: 100 }];
+    const socios = v.venta_socios && v.venta_socios.length ? v.venta_socios : [{ socio_id: MI_SOCIO_ID || STATE.socios[0]?.id, porcentaje: 100 }];
     socios.forEach(s => addSocioRow('ventaSociosRows', s.socio_id, s.porcentaje));
     document.getElementById('ventaVendidoPorInput').value = v.vendido_por || '';
 
