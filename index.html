@@ -235,7 +235,7 @@
                         <thead><tr>
                             <th data-sort="producto">Producto</th><th data-sort="categoria">Categoría</th><th class="text-right" data-sort="cantidad_comprada">Comprado</th>
                             <th class="text-right" data-sort="cantidad_vendida">Vendido</th><th class="text-right" data-sort="cantidad_disponible">Disponible</th>
-                            <th class="text-right" data-sort="coste_medio">Coste medio</th><th class="text-right" data-sort="valor_disponible">Valor en stock</th>
+                            <th class="text-right" data-sort="coste_medio">Coste medio</th><th class="text-right" data-sort="valor_disponible">Valor en stock</th><th></th>
                         </tr></thead>
                         <tbody id="inventarioTableBody"></tbody>
                     </table>
@@ -285,6 +285,10 @@
                 <div class="card glass-panel">
                     <div class="card-header"><h3>Balance entre socios</h3></div>
                     <div id="deudasResumen" class="breakdown-list"></div>
+                </div>
+                <div class="card glass-panel">
+                    <div class="card-header"><h3>Posición neta por socio</h3></div>
+                    <div id="posicionesResumen" class="breakdown-list"></div>
                 </div>
                 <div class="card glass-panel">
                     <div class="card-header">
@@ -489,6 +493,13 @@
                     </button>
                 </div>
 
+                <div class="form-group" id="ventaVendidoPorRow" style="display:none;">
+                    <label>¿Quién lo ha vendido?</label>
+                    <select id="ventaVendidoPorInput">
+                        <option value="">Sin especificar (no generar deuda)</option>
+                    </select>
+                </div>
+
                 <button type="submit" class="submit-btn">Guardar</button>
             </form>
         </div>
@@ -627,7 +638,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=8"></script>
-    <script src="app.js?v=8"></script>
+    <script src="config.js?v=9"></script>
+    <script src="app.js?v=9"></script>
 </body>
 </html>

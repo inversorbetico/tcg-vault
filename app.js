@@ -141,6 +141,7 @@ function addSocioRow(containerId, socioId, porcentaje) {
 
 function onSocioRowsChanged(containerId) {
     if (containerId === 'compraSociosRows') syncPagadoPorVisibility();
+    if (containerId === 'ventaSociosRows') syncVendidoPorVisibility();
 }
 
 function fillPagadoPorSelect(selected) {
@@ -158,6 +159,24 @@ function syncPagadoPorVisibility() {
     } else {
         row.style.display = 'none';
         document.getElementById('compraPagadoPorInput').value = '';
+    }
+}
+
+function fillVendidoPorSelect(selected) {
+    const select = document.getElementById('ventaVendidoPorInput');
+    select.innerHTML = '<option value="">Sin especificar (no generar deuda)</option>' + socioOptionsHtml(selected);
+}
+
+function syncVendidoPorVisibility() {
+    const rows = getSocioRows('ventaSociosRows');
+    const row = document.getElementById('ventaVendidoPorRow');
+    if (rows.length > 1) {
+        const current = document.getElementById('ventaVendidoPorInput').value;
+        fillVendidoPorSelect(current ? parseInt(current, 10) : null);
+        row.style.display = '';
+    } else {
+        row.style.display = 'none';
+        document.getElementById('ventaVendidoPorInput').value = '';
     }
 }
 
@@ -416,6 +435,7 @@ function computeInventarioFiltrado() {
             porProducto[pid] = {
                 producto_id: pid, producto: p?.nombre || '-', categoria: p?.categoria || '-',
                 cantidad_comprada: 0, coste_total: 0, cantidad_vendida: 0, cantidad_ripeada: 0,
+                tieneSealed: false, tieneRaw: false,
             };
         }
         return porProducto[pid];
@@ -427,6 +447,8 @@ function computeInventarioFiltrado() {
         const acc = ensure(c.producto_id);
         acc.cantidad_comprada += c.cantidad * share;
         acc.coste_total += c.precio_total * share;
+        if (c.tipo === 'SEALED') acc.tieneSealed = true;
+        if (c.tipo === 'RAW') acc.tieneRaw = true;
     });
     STATE.ventas.forEach(v => {
         const share = shareDeSocios(v.venta_socios);
@@ -643,6 +665,7 @@ function openEditVenta(id, clone = false) {
     document.getElementById('ventaSociosRows').innerHTML = '';
     const socios = v.venta_socios && v.venta_socios.length ? v.venta_socios : [{ socio_id: STATE.socios[0]?.id, porcentaje: 100 }];
     socios.forEach(s => addSocioRow('ventaSociosRows', s.socio_id, s.porcentaje));
+    document.getElementById('ventaVendidoPorInput').value = v.vendido_por || '';
 
     openModal('ventaModal');
 }
@@ -676,6 +699,9 @@ document.getElementById('ventaForm').addEventListener('submit', async (e) => {
         fecha: document.getElementById('ventaFechaInput').value,
         cobrado: document.getElementById('ventaCobradoInput').value === 'true',
         comentarios: document.getElementById('ventaComentariosInput').value || null,
+        vendido_por: rows.length > 1
+            ? (parseInt(document.getElementById('ventaVendidoPorInput').value, 10) || null)
+            : null,
     };
     const editId = document.getElementById('ventaIdInput').value;
     let ventaId;
@@ -814,8 +840,25 @@ function renderInventario() {
             <td class="text-right">${i.cantidad_disponible.toFixed(2)}</td>
             <td class="text-right">${formatCurrency(i.coste_medio)}</td>
             <td class="text-right">${formatCurrency(i.valor_disponible)}</td>
+            <td>
+                <button class="icon-btn vender-inventario" data-id="${i.producto_id}" title="Vender"><span class="material-symbols-outlined" style="font-size:16px;">receipt_long</span></button>
+                ${i.tieneSealed ? `<button class="icon-btn rip-inventario" data-id="${i.producto_id}" title="Ripear"><span class="material-symbols-outlined" style="font-size:16px;">content_cut</span></button>` : ''}
+                ${i.tieneRaw ? `<button class="icon-btn gradear-inventario" data-id="${i.producto_id}" title="Mandar a gradear"><span class="material-symbols-outlined" style="font-size:16px;">verified</span></button>` : ''}
+            </td>
         `;
         tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.vender-inventario').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const i = datos.find(d => String(d.producto_id) === btn.dataset.id);
+            if (i) abrirVentaDesdeInventario(i.producto, i.coste_medio);
+        });
+    });
+    tbody.querySelectorAll('.rip-inventario').forEach(btn => {
+        btn.addEventListener('click', () => abrirRipDesdeInventario(parseInt(btn.dataset.id, 10)));
+    });
+    tbody.querySelectorAll('.gradear-inventario').forEach(btn => {
+        btn.addEventListener('click', () => abrirGradingDesdeInventario(parseInt(btn.dataset.id, 10)));
     });
 
     // Datos rapidos
@@ -925,6 +968,16 @@ function computeDeudas() {
         });
     });
 
+    STATE.ventas.forEach(v => {
+        if (!v.vendido_por || !v.cobrado) return;
+        const base = v.precio_total_venta || 0;
+        (v.venta_socios || []).forEach(s => {
+            if (s.socio_id === v.vendido_por) return;
+            // Quien ha vendido se queda con el dinero de todos: le debe a cada otro socio su parte.
+            add(v.vendido_por, s.socio_id, base * s.porcentaje / 100);
+        });
+    });
+
     STATE.pagos.forEach(p => {
         if (!p.destinatario_id) return;
         // Un pago de X a Y cancela (parte de) lo que X le debe a Y.
@@ -951,9 +1004,8 @@ function computeDeudas() {
     return pares;
 }
 
-function renderDeudasResumen() {
+function renderDeudasResumen(pares) {
     const container = document.getElementById('deudasResumen');
-    const pares = computeDeudas();
     if (!pares.length) {
         container.innerHTML = '<p style="color:var(--text-secondary); margin:0;">No hay deudas pendientes entre socios.</p>';
         return;
@@ -974,8 +1026,48 @@ function renderDeudasResumen() {
     });
 }
 
+function computePosicionesNetas(pares) {
+    const pos = {};
+    STATE.socios.forEach(s => { pos[s.id] = 0; });
+    pares.forEach(p => {
+        pos[p.deudorId] = (pos[p.deudorId] || 0) - p.monto;
+        pos[p.acreedorId] = (pos[p.acreedorId] || 0) + p.monto;
+    });
+    return pos;
+}
+
+function renderPosicionesResumen(pares) {
+    const container = document.getElementById('posicionesResumen');
+    if (!pares.length) {
+        container.innerHTML = '';
+        return;
+    }
+    const pos = computePosicionesNetas(pares);
+    container.innerHTML = STATE.socios.map(s => {
+        const monto = pos[s.id] || 0;
+        if (Math.abs(monto) < 0.01) {
+            return `
+                <div class="breakdown-item">
+                    <span class="bd-label">${s.nombre}</span>
+                    <span class="bd-value">${formatCurrency(0)}</span>
+                </div>
+            `;
+        }
+        const signo = monto >= 0 ? 'positive' : 'negative';
+        const texto = monto >= 0 ? 'le deben' : 'debe';
+        return `
+            <div class="breakdown-item">
+                <span class="bd-label">${s.nombre} (${texto})</span>
+                <span class="bd-value pl-badge ${signo}">${formatCurrency(Math.abs(monto))}</span>
+            </div>
+        `;
+    }).join('');
+}
+
 function renderPagos() {
-    renderDeudasResumen();
+    const pares = computeDeudas();
+    renderDeudasResumen(pares);
+    renderPosicionesResumen(pares);
     const tbody = document.getElementById('pagosTableBody');
     tbody.innerHTML = '';
     let rows = STATE.pagos.filter(p => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(p.pagador_id));
@@ -1138,10 +1230,38 @@ function compraLabel(c) {
     return `${productoNombre(c.producto_id)} — ${c.fecha || 's/f'} — ${formatCurrency(c.precio_unitario)}`;
 }
 
-function fillCompraOrigenSelect(selectId, tipo) {
+function fillCompraOrigenSelect(selectId, tipo, productoId) {
     const sel = document.getElementById(selectId);
-    const candidatas = STATE.compras.filter(c => c.estado === 'recibido' && c.tipo === tipo);
+    const candidatas = STATE.compras.filter(c => c.estado === 'recibido' && c.tipo === tipo
+        && incluyeAlgunSocio(c.compra_socios) && (!productoId || c.producto_id === productoId));
     sel.innerHTML = candidatas.map(c => `<option value="${c.id}">${compraLabel(c)}</option>`).join('');
+}
+
+function abrirRipDesdeInventario(productoId) {
+    document.getElementById('ripForm').reset();
+    document.getElementById('ripFechaInput').value = todayStr();
+    fillCompraOrigenSelect('ripCompraOrigenInput', 'SEALED', productoId);
+    document.getElementById('ripPullsRows').innerHTML = '';
+    addPullRow();
+    openModal('ripModal');
+}
+
+function abrirGradingDesdeInventario(productoId) {
+    document.getElementById('gradingForm').reset();
+    document.getElementById('gradingFechaInput').value = todayStr();
+    fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW', productoId);
+    openModal('gradingModal');
+}
+
+function abrirVentaDesdeInventario(nombre, costeMedio) {
+    document.getElementById('ventaForm').reset();
+    document.getElementById('ventaIdInput').value = '';
+    document.getElementById('ventaModalTitle').textContent = 'Nueva venta';
+    document.getElementById('ventaFechaInput').value = todayStr();
+    document.getElementById('ventaProductoInput').value = nombre;
+    document.getElementById('ventaCosteInput').value = (costeMedio || 0).toFixed(2);
+    resetSocioRows('ventaSociosRows');
+    openModal('ventaModal');
 }
 
 async function copiarRepartoSocios(origenCompraId, nuevaCompraId) {
