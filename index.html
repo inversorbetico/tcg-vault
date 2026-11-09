@@ -129,6 +129,8 @@
                         <div class="stat-item"><span class="label">Beneficio</span><span class="value" id="statBeneficio">€0.00</span></div>
                         <div class="stat-item"><span class="label">Valor en stock</span><span class="value" id="statValorStock">€0.00</span></div>
                         <div class="stat-item"><span class="label">Reservas pendientes de pago</span><span class="value" id="statPendientePago">€0.00</span></div>
+                        <div class="stat-item"><span class="label">Rentabilidad (margen)</span><span class="value" id="statRentabilidad">0%</span></div>
+                        <div class="stat-item"><span class="label">ROI</span><span class="value" id="statROI">0%</span></div>
                     </div>
                 </div>
                 <div class="card glass-panel">
@@ -147,6 +149,15 @@
                     <div class="card-header"><h3>Invertido vs. vendido por socio</h3></div>
                     <div class="chart-container" style="height:280px;">
                         <canvas id="socioChart"></canvas>
+                    </div>
+                </div>
+                <div class="card glass-panel span-3">
+                    <div class="card-header"><h3>Inventario por tipo (Sellado / Suelta / Gradeada)</h3></div>
+                    <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+                        <div class="chart-container" style="height:240px; width:240px; flex:none;">
+                            <canvas id="tipoChart"></canvas>
+                        </div>
+                        <div id="tipoBreakdown" style="flex:1; min-width:200px;"></div>
                     </div>
                 </div>
             </div>
@@ -372,6 +383,16 @@
                             <option value="Korean">Korean</option>
                             <option value="Chinese">Chinese</option>
                         </select>
+                    </div>
+                </div>
+                <div class="form-row" id="compraGradingRow" style="display:none;">
+                    <div class="form-group">
+                        <label>Empresa de grading</label>
+                        <input type="text" id="compraGradingEmpresaInput" placeholder="PSA, BGS, CGC...">
+                    </div>
+                    <div class="form-group">
+                        <label>Nota / Grado</label>
+                        <input type="number" id="compraGradingNotaInput" min="0" max="10" step="0.5">
                     </div>
                 </div>
                 <div class="form-row">
@@ -639,7 +660,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=10"></script>
-    <script src="app.js?v=10"></script>
+    <script src="config.js?v=11"></script>
+    <script src="app.js?v=11"></script>
 </body>
 </html>

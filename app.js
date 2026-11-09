@@ -233,6 +233,14 @@ document.getElementById('compraPreorderInput').addEventListener('change', (e) =>
     document.getElementById('compraPagadoRow').style.display = esReserva ? 'flex' : 'none';
 });
 
+function syncGradingVisibility() {
+    const esGraded = document.getElementById('compraTipoInput').value === 'GRADED';
+    document.getElementById('compraGradingRow').style.display = esGraded ? 'flex' : 'none';
+    document.getElementById('compraGradingEmpresaInput').required = esGraded;
+    document.getElementById('compraGradingNotaInput').required = esGraded;
+}
+document.getElementById('compraTipoInput').addEventListener('change', syncGradingVisibility);
+
 document.getElementById('addCompraBtn').addEventListener('click', () => {
     document.getElementById('compraForm').reset();
     document.getElementById('compraIdInput').value = '';
@@ -242,6 +250,7 @@ document.getElementById('addCompraBtn').addEventListener('click', () => {
     document.getElementById('compraPagadoRow').style.display = 'none';
     document.getElementById('compraFechaInput').value = todayStr();
     resetSocioRows('compraSociosRows');
+    syncGradingVisibility();
     openModal('compraModal');
 });
 
@@ -254,6 +263,7 @@ document.getElementById('addReservaBtn').addEventListener('click', () => {
     document.getElementById('compraPagadoRow').style.display = 'flex';
     document.getElementById('compraFechaInput').value = todayStr();
     resetSocioRows('compraSociosRows');
+    syncGradingVisibility();
     openModal('compraModal');
 });
 
@@ -273,6 +283,9 @@ function openEditCompra(id, clone = false) {
     document.getElementById('compraCategoriaInput').value =
         STATE.productos.find(p => p.id === c.producto_id)?.categoria || '';
     document.getElementById('compraTipoInput').value = c.tipo;
+    document.getElementById('compraGradingEmpresaInput').value = c.grading_company || '';
+    document.getElementById('compraGradingNotaInput').value = c.grade ?? '';
+    syncGradingVisibility();
     document.getElementById('compraIdiomaInput').value = c.idioma || '';
     document.getElementById('compraCantidadInput').value = c.cantidad;
     document.getElementById('compraPrecioInput').value = c.precio_unitario;
@@ -307,11 +320,22 @@ document.getElementById('compraForm').addEventListener('submit', async (e) => {
     const producto_id = await findOrCreateProducto(nombre, categoria);
 
     const estado = document.getElementById('compraEstadoInput').value;
+    const tipo = document.getElementById('compraTipoInput').value;
+    if (tipo === 'GRADED') {
+        const empresa = document.getElementById('compraGradingEmpresaInput').value.trim();
+        const nota = document.getElementById('compraGradingNotaInput').value;
+        if (!empresa || nota === '') {
+            alert('Indica la empresa de grading y la nota para una compra gradeada.');
+            return;
+        }
+    }
     const vals = {
         producto_id,
         cantidad: parseFloat(document.getElementById('compraCantidadInput').value),
         precio_unitario: parseFloat(document.getElementById('compraPrecioInput').value),
-        tipo: document.getElementById('compraTipoInput').value,
+        tipo,
+        grading_company: tipo === 'GRADED' ? document.getElementById('compraGradingEmpresaInput').value.trim() : null,
+        grade: tipo === 'GRADED' ? parseFloat(document.getElementById('compraGradingNotaInput').value) : null,
         idioma: document.getElementById('compraIdiomaInput').value || null,
         proveedor: document.getElementById('compraProveedorInput').value || null,
         fecha: document.getElementById('compraFechaInput').value,
@@ -435,7 +459,7 @@ function computeInventarioFiltrado() {
             porProducto[pid] = {
                 producto_id: pid, producto: p?.nombre || '-', categoria: p?.categoria || '-',
                 cantidad_comprada: 0, coste_total: 0, cantidad_vendida: 0, cantidad_ripeada: 0,
-                tieneSealed: false, tieneRaw: false,
+                tieneSealed: false, tieneRaw: false, cantidadPorTipo: { SEALED: 0, RAW: 0, GRADED: 0 },
             };
         }
         return porProducto[pid];
@@ -449,6 +473,7 @@ function computeInventarioFiltrado() {
         acc.coste_total += c.precio_total * share;
         if (c.tipo === 'SEALED') acc.tieneSealed = true;
         if (c.tipo === 'RAW') acc.tieneRaw = true;
+        acc.cantidadPorTipo[c.tipo] = (acc.cantidadPorTipo[c.tipo] || 0) + c.cantidad * share;
     });
     STATE.ventas.forEach(v => {
         const share = shareDeSocios(v.venta_socios);
@@ -466,8 +491,10 @@ function computeInventarioFiltrado() {
     return Object.values(porProducto).map(acc => {
         const coste_medio = acc.cantidad_comprada > 0 ? acc.coste_total / acc.cantidad_comprada : 0;
         const cantidad_disponible = acc.cantidad_comprada - acc.cantidad_vendida - acc.cantidad_ripeada;
+        const tipoDominante = Object.entries(acc.cantidadPorTipo)
+            .sort((a, b) => b[1] - a[1])[0]?.[0] || 'SEALED';
         return {
-            ...acc, coste_medio, cantidad_disponible,
+            ...acc, coste_medio, cantidad_disponible, tipoDominante,
             valor_disponible: cantidad_disponible * coste_medio,
         };
     }).sort((a, b) => b.valor_disponible - a.valor_disponible);
@@ -1146,22 +1173,26 @@ function renderSocios() {
 let categoriaChart = null;
 let socioChart = null;
 let estadosChart = null;
+let tipoChart = null;
 let ventasSocioChart = null;
 let inventarioCategoriaChart = null;
 
 function renderResumen() {
     const inventarioFiltrado = computeInventarioFiltrado();
-    const resumenFiltrado = STATE.resumen.filter(
-        r => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(r.socio_id));
 
-    const totalVendido = resumenFiltrado.reduce((s, r) => s + (r.vendido || 0), 0);
-    const totalInvertido = resumenFiltrado.reduce((s, r) => s + (r.invertido || 0), 0);
-    const beneficio = resumenFiltrado.reduce((s, r) => s + (r.beneficio || 0), 0);
+    const comprasFiltradas = STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios));
+    const reservasFiltradas = STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios));
+    const ventasFiltradas = STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios));
+
+    const totalInvertido = comprasFiltradas.reduce((s, c) => s + (c.precio_total || 0), 0);
+    const totalVendido = ventasFiltradas.reduce((s, v) => s + (v.precio_total_venta || 0), 0);
+    const totalCosteVendido = ventasFiltradas.reduce((s, v) => s + (v.precio_compra_base || 0) * (v.cantidad || 0), 0);
+    const beneficio = totalVendido - totalCosteVendido;
     const valorInventario = inventarioFiltrado.reduce((s, i) => s + (i.valor_disponible || 0), 0);
-    const pendientePago = resumenFiltrado.reduce((s, r) => s + (r.pendiente_pago_compra || 0), 0);
-    const valorReservado = STATE.compras
-        .filter(c => c.estado === 'reservado')
-        .reduce((s, c) => s + c.precio_total * shareDeSocios(c.compra_socios), 0);
+    const pendientePago = reservasFiltradas.reduce((s, c) => s + (c.pendiente_pagar || 0), 0);
+    const valorReservado = reservasFiltradas.reduce((s, c) => s + (c.precio_total || 0), 0);
+    const rentabilidad = totalVendido > 0 ? (beneficio / totalVendido) * 100 : 0;
+    const roi = totalInvertido > 0 ? (beneficio / totalInvertido) * 100 : 0;
 
     document.getElementById('statValorInventario').textContent = formatCurrency(valorInventario);
     document.getElementById('statTotalComprado').textContent = formatCurrency(totalInvertido);
@@ -1169,6 +1200,8 @@ function renderResumen() {
     document.getElementById('statBeneficio').textContent = formatCurrency(beneficio);
     document.getElementById('statValorStock').textContent = formatCurrency(valorInventario);
     document.getElementById('statPendientePago').textContent = formatCurrency(pendientePago);
+    document.getElementById('statRentabilidad').textContent = rentabilidad.toFixed(1) + '%';
+    document.getElementById('statROI').textContent = roi.toFixed(1) + '%';
 
     // Grafico por categoria
     const byCat = {};
@@ -1203,10 +1236,23 @@ function renderResumen() {
         });
     }
 
-    // Grafico por socio
-    const socioLabels = resumenFiltrado.map(r => r.socio);
-    const invertidoData = resumenFiltrado.map(r => r.invertido);
-    const vendidoData = resumenFiltrado.map(r => r.vendido);
+    // Grafico por socio (participacion de cada socio dentro de la vista filtrada actual)
+    const porSocioInvertido = {};
+    const porSocioVendido = {};
+    comprasFiltradas.forEach(c => {
+        (c.compra_socios || []).forEach(s => {
+            porSocioInvertido[s.socio_id] = (porSocioInvertido[s.socio_id] || 0) + (c.precio_total || 0) * s.porcentaje / 100;
+        });
+    });
+    ventasFiltradas.forEach(v => {
+        (v.venta_socios || []).forEach(s => {
+            porSocioVendido[s.socio_id] = (porSocioVendido[s.socio_id] || 0) + (v.precio_total_venta || 0) * s.porcentaje / 100;
+        });
+    });
+    const socioIds = Array.from(new Set([...Object.keys(porSocioInvertido), ...Object.keys(porSocioVendido)])).map(Number);
+    const socioLabels = socioIds.map(id => socioNombre(id));
+    const invertidoData = socioIds.map(id => porSocioInvertido[id] || 0);
+    const vendidoData = socioIds.map(id => porSocioVendido[id] || 0);
 
     const ctx2 = document.getElementById('socioChart');
     if (socioChart) socioChart.destroy();
@@ -1222,6 +1268,46 @@ function renderResumen() {
             },
             options: { responsive: true, maintainAspectRatio: false },
         });
+    }
+
+    // Grafico por tipo (Sellado / Suelta / Gradeada)
+    const TIPO_LABELS = { SEALED: 'Sellado', RAW: 'Suelta', GRADED: 'Gradeada' };
+    const valorPorTipo = { SEALED: 0, RAW: 0, GRADED: 0 };
+    inventarioFiltrado.forEach(i => {
+        valorPorTipo[i.tipoDominante] = (valorPorTipo[i.tipoDominante] || 0) + (i.valor_disponible || 0);
+    });
+    const totalTipo = Object.values(valorPorTipo).reduce((s, v) => s + v, 0);
+    const tipoKeys = Object.keys(valorPorTipo).filter(k => valorPorTipo[k] > 0);
+
+    const ctxT = document.getElementById('tipoChart');
+    if (tipoChart) tipoChart.destroy();
+    if (ctxT && window.Chart) {
+        tipoChart = new Chart(ctxT.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: tipoKeys.map(k => TIPO_LABELS[k]),
+                datasets: [{ data: tipoKeys.map(k => valorPorTipo[k]) }],
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } },
+        });
+    }
+
+    const tipoBreakdown = document.getElementById('tipoBreakdown');
+    if (tipoBreakdown) {
+        if (!totalTipo) {
+            tipoBreakdown.innerHTML = '<p style="color:var(--text-secondary); margin:0;">Sin inventario disponible.</p>';
+        } else {
+            tipoBreakdown.innerHTML = ['SEALED', 'RAW', 'GRADED'].map(k => {
+                const valor = valorPorTipo[k] || 0;
+                const pct = totalTipo > 0 ? (valor / totalTipo) * 100 : 0;
+                return `
+                    <div class="breakdown-item">
+                        <span class="bd-label">${TIPO_LABELS[k]}</span>
+                        <span class="bd-value">${pct.toFixed(1)}% · ${formatCurrency(valor)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
     }
 }
 
