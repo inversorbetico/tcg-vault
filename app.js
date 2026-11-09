@@ -1408,6 +1408,8 @@ function syncGradingCantidadMax() {
     const cantidadInput = document.getElementById('gradingCantidadInput');
     cantidadInput.max = origen ? origen.cantidad : '';
     if (origen && parseInt(cantidadInput.value, 10) > origen.cantidad) cantidadInput.value = origen.cantidad;
+    document.getElementById('gradingCantidadMaxHint').textContent =
+        origen ? `(máx. ${origen.cantidad} en este lote)` : '';
 }
 document.getElementById('gradingCompraOrigenInput').addEventListener('change', syncGradingCantidadMax);
 

@@ -547,10 +547,11 @@
                 <div class="form-group">
                     <label>Carta a enviar (de tu inventario, sin gradear)</label>
                     <select id="gradingCompraOrigenInput" required></select>
+                    <small style="color:var(--text-secondary);">Si compraste estas cartas en varios lotes (con precios distintos), cada lote aparece por separado y solo puedes enviar hasta las unidades de ese lote. Para enviar más, repite el envío eligiendo otro lote.</small>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label>Cantidad de unidades a enviar</label>
+                        <label>Cantidad de unidades a enviar <span id="gradingCantidadMaxHint" style="font-weight:normal; color:var(--text-secondary);"></span></label>
                         <input type="number" id="gradingCantidadInput" min="1" step="1" value="1" required>
                     </div>
                     <div class="form-group">
@@ -685,7 +686,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=18"></script>
-    <script src="app.js?v=18"></script>
+    <script src="config.js?v=19"></script>
+    <script src="app.js?v=19"></script>
 </body>
 </html>
