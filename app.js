@@ -64,6 +64,11 @@ function productoNombre(id) {
     return p ? p.nombre : '-';
 }
 
+function productoCategoria(id) {
+    const p = STATE.productos.find(p => p.id === id);
+    return p ? p.categoria : '';
+}
+
 async function findOrCreateProducto(nombre, categoria) {
     const existing = STATE.productos.find(
         p => p.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
@@ -615,10 +620,30 @@ function initSearchInput(inputId, tableName, onSearch) {
     });
 }
 
+// ---------- Filtro por categoria TCG ----------
+const CATEGORIA_FILTER_STATE = {};
+
+function applyCategoriaFilter(tableName, rows, categoriaGetter) {
+    const cat = CATEGORIA_FILTER_STATE[tableName] || '';
+    if (!cat) return rows;
+    return rows.filter(r => categoriaGetter(r) === cat);
+}
+
+function initCategoriaFilter(selectId, tableName, onFilter) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.value = CATEGORIA_FILTER_STATE[tableName] || '';
+    select.addEventListener('change', () => {
+        CATEGORIA_FILTER_STATE[tableName] = select.value;
+        onFilter();
+    });
+}
+
 function renderCompras() {
     const tbody = document.getElementById('comprasTableBody');
     tbody.innerHTML = '';
     let rows = STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios));
+    rows = applyCategoriaFilter('compras', rows, c => productoCategoria(c.producto_id));
     rows = applySearch('compras', rows, [
         c => c.referencia,
         c => productoNombre(c.producto_id),
@@ -672,6 +697,7 @@ function renderReservas() {
     const tbody = document.getElementById('reservasTableBody');
     tbody.innerHTML = '';
     let rows = STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios));
+    rows = applyCategoriaFilter('reservas', rows, c => productoCategoria(c.producto_id));
     rows = applySearch('reservas', rows, [
         c => c.referencia,
         c => productoNombre(c.producto_id),
@@ -859,6 +885,7 @@ function renderVentas() {
     const tbody = document.getElementById('ventasTableBody');
     tbody.innerHTML = '';
     let rows = STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios));
+    rows = applyCategoriaFilter('ventas', rows, v => productoCategoria(v.producto_id));
     rows = applySearch('ventas', rows, [
         v => v.referencia,
         v => productoNombre(v.producto_id),
@@ -951,6 +978,7 @@ function renderInventario() {
     const tbody = document.getElementById('inventarioTableBody');
     tbody.innerHTML = '';
     let datos = computeInventarioFiltrado().filter(i => i.cantidad_disponible > 0.001);
+    datos = applyCategoriaFilter('inventario', datos, i => i.categoria);
     datos = applySearch('inventario', datos, [
         i => i.producto,
         i => i.categoria,
@@ -1531,6 +1559,10 @@ function renderGraded() {
         const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
         return incluyeAlgunSocio(origen?.compra_socios);
     });
+    rows = applyCategoriaFilter('graded', rows, g => {
+        const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
+        return origen ? productoCategoria(origen.producto_id) : '';
+    });
     rows = applySearch('graded', rows, [
         g => g.referencia,
         g => {
@@ -1764,6 +1796,10 @@ function renderRips() {
         const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
         return incluyeAlgunSocio(origen?.compra_socios);
     });
+    rows = applyCategoriaFilter('rips', rows, r => {
+        const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
+        return origen ? productoCategoria(origen.producto_id) : '';
+    });
     rows = applySearch('rips', rows, [
         r => r.referencia,
         r => {
@@ -1840,6 +1876,13 @@ initSearchInput('gradedSearchInput', 'graded', renderGraded);
 initSearchInput('ripsSearchInput', 'rips', renderRips);
 initSearchInput('pagosSearchInput', 'pagos', renderPagos);
 initSearchInput('sociosSearchInput', 'socios', renderSocios);
+
+initCategoriaFilter('comprasCategoriaInput', 'compras', renderCompras);
+initCategoriaFilter('reservasCategoriaInput', 'reservas', renderReservas);
+initCategoriaFilter('ventasCategoriaInput', 'ventas', renderVentas);
+initCategoriaFilter('inventarioCategoriaInput', 'inventario', renderInventario);
+initCategoriaFilter('gradedCategoriaInput', 'graded', renderGraded);
+initCategoriaFilter('ripsCategoriaInput', 'rips', renderRips);
 
 // ---------- Tema ----------
 document.getElementById('themeToggle').addEventListener('click', () => {
