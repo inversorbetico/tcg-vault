@@ -1241,7 +1241,9 @@ let inventarioCategoriaChart = null;
 function renderResumen() {
     const inventarioFiltrado = computeInventarioFiltrado();
 
-    const comprasFiltradas = STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios));
+    // Excluye compras de_rip: son una reclasificacion de un sobre/caja ya contado como
+    // "invertido", no dinero nuevo, para no contarlo dos veces en Comprado/ROI.
+    const comprasFiltradas = STATE.compras.filter(c => c.estado === 'recibido' && !c.de_rip && incluyeAlgunSocio(c.compra_socios));
     const reservasFiltradas = STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios));
     const ventasFiltradas = STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios));
 
@@ -1552,6 +1554,7 @@ document.getElementById('gradingRecibidoForm').addEventListener('submit', async 
         idioma: origen.idioma,
         fecha: fechaRecibido,
         estado: 'recibido',
+        de_rip: origen.de_rip || false,
         comentarios: `Gradeada a partir de ${origen.referencia}`,
     }).select().single();
     if (errIns) { alert('Error creando compra gradeada: ' + errIns.message); return; }
@@ -1640,9 +1643,22 @@ document.getElementById('ripForm').addEventListener('submit', async (e) => {
     if (agregarCartas && !pulls.length) { alert('Añade al menos una carta obtenida, o desmarca la casilla si no quieres añadir ninguna.'); return; }
 
     const origenId = parseInt(document.getElementById('ripCompraOrigenInput').value, 10);
+    const origen = STATE.compras.find(c => c.id === origenId);
+    const cantidadAbierta = parseFloat(document.getElementById('ripCantidadInput').value) || 1;
+    const costeTotalRip = (origen?.precio_unitario || 0) * cantidadAbierta;
+    const totalUnidadesPulls = pulls.reduce((s, p) => s + (p.cantidad || 0), 0);
+
+    if (totalUnidadesPulls < cantidadAbierta) {
+        const msg = totalUnidadesPulls === 0
+            ? `No has añadido cartas conseguidas. El coste de lo abierto (${formatCurrency(costeTotalRip)}) no se asignará a ningún producto y desaparecerá del valor de tu stock. ¿Continuar?`
+            : `Has abierto ${cantidadAbierta} unidad(es) pero solo has registrado ${totalUnidadesPulls} carta(s). Todo el coste (${formatCurrency(costeTotalRip)}) se repartirá solo entre las cartas registradas. ¿Continuar?`;
+        if (!confirm(msg)) return;
+    }
+    const costeUnitarioPull = totalUnidadesPulls > 0 ? costeTotalRip / totalUnidadesPulls : 0;
+
     const vals = {
         compra_origen_id: origenId,
-        cantidad_abierta: parseFloat(document.getElementById('ripCantidadInput').value) || 1,
+        cantidad_abierta: cantidadAbierta,
         fecha: document.getElementById('ripFechaInput').value,
         comentarios: document.getElementById('ripComentariosInput').value || null,
     };
@@ -1654,9 +1670,10 @@ document.getElementById('ripForm').addEventListener('submit', async (e) => {
         const { data: nuevaCompra, error: errC } = await sb.from('compras').insert({
             producto_id,
             cantidad: pull.cantidad,
-            precio_unitario: 0,
+            precio_unitario: costeUnitarioPull,
             tipo: 'RAW',
             estado: 'recibido',
+            de_rip: true,
             fecha: vals.fecha,
             comentarios: `Obtenida al abrir ${STATE.compras.find(c => c.id === origenId)?.referencia || ''}`,
         }).select().single();
