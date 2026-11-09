@@ -1260,6 +1260,7 @@ function renderResumen() {
     document.getElementById('statTotalVendido').textContent = formatCurrency(totalVendido);
     document.getElementById('statBeneficio').textContent = formatCurrency(beneficio);
     document.getElementById('statValorStock').textContent = formatCurrency(valorInventario);
+    document.getElementById('statValorReservado').textContent = formatCurrency(valorReservado);
     document.getElementById('statPendientePago').textContent = formatCurrency(pendientePago);
     document.getElementById('statRentabilidad').textContent = rentabilidad.toFixed(1) + '%';
     document.getElementById('statROI').textContent = roi.toFixed(1) + '%';
