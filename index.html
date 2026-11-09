@@ -244,7 +244,7 @@
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="inventarioTable">
                         <thead><tr>
-                            <th data-sort="producto">Producto</th><th data-sort="categoria">Categoría</th><th class="text-right" data-sort="cantidad_comprada">Comprado</th>
+                            <th data-sort="producto">Producto</th><th data-sort="categoria">Categoría</th><th data-sort="tipo">Tipo</th><th class="text-right" data-sort="cantidad_comprada">Comprado</th>
                             <th class="text-right" data-sort="cantidad_vendida">Vendido</th><th class="text-right" data-sort="cantidad_disponible">Disponible</th>
                             <th class="text-right" data-sort="coste_medio">Coste medio</th><th class="text-right" data-sort="valor_disponible">Valor en stock</th><th></th>
                         </tr></thead>
@@ -463,6 +463,14 @@
                     <label>Producto</label>
                     <input type="text" id="ventaProductoInput" list="productosList" required autocomplete="off">
                 </div>
+                <div class="form-group">
+                    <label>Tipo</label>
+                    <select id="ventaTipoInput" required>
+                        <option value="SEALED">Sellado</option>
+                        <option value="RAW">Suelta (sin gradear)</option>
+                        <option value="GRADED">Gradeada</option>
+                    </select>
+                </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Cantidad</label>
@@ -660,7 +668,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=13"></script>
-    <script src="app.js?v=13"></script>
+    <script src="config.js?v=14"></script>
+    <script src="app.js?v=14"></script>
 </body>
 </html>

@@ -2,6 +2,8 @@
 
 const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
 
+const TIPO_LABELS = { SEALED: 'Sellado', RAW: 'Suelta', GRADED: 'Gradeada' };
+
 let STATE = {
     socios: [],
     productos: [],
@@ -487,50 +489,55 @@ function incluyeAlgunSocio(repartoRows) {
     return shareDeSocios(repartoRows) > 0;
 }
 
+// Si una venta antigua no tiene tipo asignado, se infiere del tipo (unico, en la
+// practica) de las compras recibidas de ese producto.
+function inferirTipoProducto(productoId) {
+    const c = STATE.compras.find(c => c.producto_id === productoId && c.estado === 'recibido');
+    return c ? c.tipo : 'SEALED';
+}
+
+// Agrupa por producto Y por tipo (Sellado/Suelta/Gradeada): son listados distintos,
+// con precio y disponibilidad propios, aunque sean la misma carta.
 function computeInventarioFiltrado() {
-    const porProducto = {};
-    const ensure = (pid) => {
-        if (!porProducto[pid]) {
+    const porClave = {};
+    const ensure = (pid, tipo) => {
+        const clave = `${pid}::${tipo}`;
+        if (!porClave[clave]) {
             const p = STATE.productos.find(x => x.id === pid);
-            porProducto[pid] = {
-                producto_id: pid, producto: p?.nombre || '-', categoria: p?.categoria || '-',
+            porClave[clave] = {
+                producto_id: pid, producto: p?.nombre || '-', categoria: p?.categoria || '-', tipo,
                 cantidad_comprada: 0, coste_total: 0, cantidad_vendida: 0, cantidad_ripeada: 0,
-                tieneSealed: false, tieneRaw: false, cantidadPorTipo: { SEALED: 0, RAW: 0, GRADED: 0 },
             };
         }
-        return porProducto[pid];
+        return porClave[clave];
     };
 
     STATE.compras.filter(c => c.estado === 'recibido').forEach(c => {
         const share = shareDeSocios(c.compra_socios);
         if (share <= 0) return;
-        const acc = ensure(c.producto_id);
+        const acc = ensure(c.producto_id, c.tipo);
         acc.cantidad_comprada += c.cantidad * share;
         acc.coste_total += c.precio_total * share;
-        if (c.tipo === 'SEALED') acc.tieneSealed = true;
-        if (c.tipo === 'RAW') acc.tieneRaw = true;
-        acc.cantidadPorTipo[c.tipo] = (acc.cantidadPorTipo[c.tipo] || 0) + c.cantidad * share;
     });
     STATE.ventas.forEach(v => {
         const share = shareDeSocios(v.venta_socios);
         if (share <= 0) return;
-        ensure(v.producto_id).cantidad_vendida += v.cantidad * share;
+        const tipo = v.tipo || inferirTipoProducto(v.producto_id);
+        ensure(v.producto_id, tipo).cantidad_vendida += v.cantidad * share;
     });
     STATE.rips.forEach(r => {
         const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
         if (!origen) return;
         const share = shareDeSocios(origen.compra_socios);
         if (share <= 0) return;
-        ensure(origen.producto_id).cantidad_ripeada += share;
+        ensure(origen.producto_id, origen.tipo).cantidad_ripeada += share;
     });
 
-    return Object.values(porProducto).map(acc => {
+    return Object.values(porClave).map(acc => {
         const coste_medio = acc.cantidad_comprada > 0 ? acc.coste_total / acc.cantidad_comprada : 0;
         const cantidad_disponible = acc.cantidad_comprada - acc.cantidad_vendida - acc.cantidad_ripeada;
-        const tipoDominante = Object.entries(acc.cantidadPorTipo)
-            .sort((a, b) => b[1] - a[1])[0]?.[0] || 'SEALED';
         return {
-            ...acc, coste_medio, cantidad_disponible, tipoDominante,
+            ...acc, coste_medio, cantidad_disponible,
             valor_disponible: cantidad_disponible * coste_medio,
         };
     }).sort((a, b) => b.valor_disponible - a.valor_disponible);
@@ -701,6 +708,18 @@ async function deleteCompra(id) {
 // ---------- Ventas ----------
 onProductoInputChange('ventaProductoInput', null);
 
+// Si el producto escrito solo tiene stock de un tipo, lo preselecciona.
+document.getElementById('ventaProductoInput').addEventListener('input', (e) => {
+    const match = STATE.productos.find(
+        p => p.nombre.trim().toLowerCase() === e.target.value.trim().toLowerCase());
+    if (!match) return;
+    const tiposConStock = computeInventarioFiltrado()
+        .filter(i => i.producto_id === match.id && i.cantidad_disponible > 0.001);
+    if (tiposConStock.length === 1) {
+        document.getElementById('ventaTipoInput').value = tiposConStock[0].tipo;
+    }
+});
+
 document.getElementById('addVentaBtn').addEventListener('click', () => {
     document.getElementById('ventaForm').reset();
     document.getElementById('ventaIdInput').value = '';
@@ -717,6 +736,7 @@ function openEditVenta(id, clone = false) {
     document.getElementById('ventaIdInput').value = clone ? '' : v.id;
     document.getElementById('ventaModalTitle').textContent = clone ? 'Nueva venta (clonada)' : 'Editar venta';
     document.getElementById('ventaProductoInput').value = productoNombre(v.producto_id);
+    document.getElementById('ventaTipoInput').value = v.tipo || inferirTipoProducto(v.producto_id);
     document.getElementById('ventaCantidadInput').value = v.cantidad;
     document.getElementById('ventaCosteInput').value = v.precio_compra_base;
     document.getElementById('ventaPrecioInput').value = v.precio_venta;
@@ -756,6 +776,7 @@ document.getElementById('ventaForm').addEventListener('submit', async (e) => {
     }
     const vals = {
         producto_id: existing.id,
+        tipo: document.getElementById('ventaTipoInput').value,
         cantidad: parseFloat(document.getElementById('ventaCantidadInput').value),
         precio_compra_base: parseFloat(document.getElementById('ventaCosteInput').value),
         precio_venta: parseFloat(document.getElementById('ventaPrecioInput').value),
@@ -888,6 +909,7 @@ function renderInventario() {
     datos = applySort('inventario', datos, {
         producto: i => i.producto,
         categoria: i => i.categoria,
+        tipo: i => TIPO_LABELS[i.tipo] || i.tipo,
         cantidad_comprada: i => i.cantidad_comprada,
         cantidad_vendida: i => i.cantidad_vendida,
         cantidad_disponible: i => i.cantidad_disponible,
@@ -895,27 +917,29 @@ function renderInventario() {
         valor_disponible: i => i.valor_disponible,
     });
     datos.forEach(i => {
+        const clave = `${i.producto_id}::${i.tipo}`;
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${i.producto}</td>
             <td>${i.categoria}</td>
+            <td>${TIPO_LABELS[i.tipo] || i.tipo}</td>
             <td class="text-right">${i.cantidad_comprada.toFixed(2)}</td>
             <td class="text-right">${i.cantidad_vendida.toFixed(2)}</td>
             <td class="text-right">${i.cantidad_disponible.toFixed(2)}</td>
             <td class="text-right">${formatCurrency(i.coste_medio)}</td>
             <td class="text-right">${formatCurrency(i.valor_disponible)}</td>
             <td>
-                <button class="icon-btn vender-inventario" data-id="${i.producto_id}" title="Vender"><span class="material-symbols-outlined" style="font-size:16px;">receipt_long</span></button>
-                ${i.tieneSealed ? `<button class="icon-btn rip-inventario" data-id="${i.producto_id}" title="Ripear"><span class="material-symbols-outlined" style="font-size:16px;">content_cut</span></button>` : ''}
-                ${i.tieneRaw ? `<button class="icon-btn gradear-inventario" data-id="${i.producto_id}" title="Mandar a gradear"><span class="material-symbols-outlined" style="font-size:16px;">verified</span></button>` : ''}
+                <button class="icon-btn vender-inventario" data-clave="${clave}" title="Vender"><span class="material-symbols-outlined" style="font-size:16px;">receipt_long</span></button>
+                ${i.tipo === 'SEALED' ? `<button class="icon-btn rip-inventario" data-id="${i.producto_id}" title="Ripear"><span class="material-symbols-outlined" style="font-size:16px;">content_cut</span></button>` : ''}
+                ${i.tipo === 'RAW' ? `<button class="icon-btn gradear-inventario" data-id="${i.producto_id}" title="Mandar a gradear"><span class="material-symbols-outlined" style="font-size:16px;">verified</span></button>` : ''}
             </td>
         `;
         tbody.appendChild(tr);
     });
     tbody.querySelectorAll('.vender-inventario').forEach(btn => {
         btn.addEventListener('click', () => {
-            const i = datos.find(d => String(d.producto_id) === btn.dataset.id);
-            if (i) abrirVentaDesdeInventario(i.producto, i.coste_medio);
+            const i = datos.find(d => `${d.producto_id}::${d.tipo}` === btn.dataset.clave);
+            if (i) abrirVentaDesdeInventario(i.producto, i.coste_medio, i.tipo);
         });
     });
     tbody.querySelectorAll('.rip-inventario').forEach(btn => {
@@ -1308,10 +1332,9 @@ function renderResumen() {
     }
 
     // Grafico por tipo (Sellado / Suelta / Gradeada)
-    const TIPO_LABELS = { SEALED: 'Sellado', RAW: 'Suelta', GRADED: 'Gradeada' };
     const valorPorTipo = { SEALED: 0, RAW: 0, GRADED: 0 };
     inventarioFiltrado.forEach(i => {
-        valorPorTipo[i.tipoDominante] = (valorPorTipo[i.tipoDominante] || 0) + (i.valor_disponible || 0);
+        valorPorTipo[i.tipo] = (valorPorTipo[i.tipo] || 0) + (i.valor_disponible || 0);
     });
     const totalTipo = Object.values(valorPorTipo).reduce((s, v) => s + v, 0);
     const tipoKeys = Object.keys(valorPorTipo).filter(k => valorPorTipo[k] > 0);
@@ -1376,12 +1399,13 @@ function abrirGradingDesdeInventario(productoId) {
     openModal('gradingModal');
 }
 
-function abrirVentaDesdeInventario(nombre, costeMedio) {
+function abrirVentaDesdeInventario(nombre, costeMedio, tipo) {
     document.getElementById('ventaForm').reset();
     document.getElementById('ventaIdInput').value = '';
     document.getElementById('ventaModalTitle').textContent = 'Nueva venta';
     document.getElementById('ventaFechaInput').value = todayStr();
     document.getElementById('ventaProductoInput').value = nombre;
+    document.getElementById('ventaTipoInput').value = tipo || 'SEALED';
     document.getElementById('ventaCosteInput').value = (costeMedio || 0).toFixed(2);
     resetSocioRows('ventaSociosRows');
     openModal('ventaModal');
