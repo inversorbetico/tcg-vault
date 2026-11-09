@@ -1374,7 +1374,7 @@ function renderResumen() {
 
 // ---------- Envios a gradear ----------
 function compraLabel(c) {
-    return `${productoNombre(c.producto_id)} — ${c.fecha || 's/f'} — ${formatCurrency(c.precio_unitario)}`;
+    return `${productoNombre(c.producto_id)} — ${c.fecha || 's/f'} — ${c.cantidad} ud. — ${formatCurrency(c.precio_unitario)}`;
 }
 
 function fillCompraOrigenSelect(selectId, tipo, productoId) {
@@ -1400,10 +1400,20 @@ function abrirRipDesdeInventario(productoId) {
     openModal('ripModal');
 }
 
+function syncGradingCantidadMax() {
+    const origenId = parseInt(document.getElementById('gradingCompraOrigenInput').value, 10);
+    const origen = STATE.compras.find(c => c.id === origenId);
+    const cantidadInput = document.getElementById('gradingCantidadInput');
+    cantidadInput.max = origen ? origen.cantidad : '';
+    if (origen && parseInt(cantidadInput.value, 10) > origen.cantidad) cantidadInput.value = origen.cantidad;
+}
+document.getElementById('gradingCompraOrigenInput').addEventListener('change', syncGradingCantidadMax);
+
 function abrirGradingDesdeInventario(productoId) {
     document.getElementById('gradingForm').reset();
     document.getElementById('gradingFechaInput').value = todayStr();
     fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW', productoId);
+    syncGradingCantidadMax();
     openModal('gradingModal');
 }
 
@@ -1431,12 +1441,14 @@ document.getElementById('addGradingBtn').addEventListener('click', () => {
     document.getElementById('gradingForm').reset();
     document.getElementById('gradingFechaInput').value = todayStr();
     fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW');
+    syncGradingCantidadMax();
     openModal('gradingModal');
 });
 
 document.getElementById('gradingForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const vals = {
+    const cantidad = parseInt(document.getElementById('gradingCantidadInput').value, 10) || 1;
+    const baseVals = {
         compra_origen_id: parseInt(document.getElementById('gradingCompraOrigenInput').value, 10),
         grading_company: document.getElementById('gradingEmpresaInput').value,
         coste_grading: parseFloat(document.getElementById('gradingCosteInput').value),
@@ -1444,7 +1456,7 @@ document.getElementById('gradingForm').addEventListener('submit', async (e) => {
         estado: 'enviado',
         comentarios: document.getElementById('gradingComentariosInput').value || null,
     };
-    const { error } = await sb.from('gradings').insert(vals);
+    const { error } = await sb.from('gradings').insert(Array.from({ length: cantidad }, () => ({ ...baseVals })));
     if (error) { alert('Error: ' + error.message); return; }
     closeModal('gradingModal');
     await loadAll();
