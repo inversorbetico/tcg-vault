@@ -590,10 +590,42 @@ function updateSortHeaderClasses(table, tableName) {
     });
 }
 
+// ---------- Buscador de tablas ----------
+const SEARCH_STATE = {};
+
+function normalizarTexto(s) {
+    return String(s ?? '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function applySearch(tableName, rows, textGetters) {
+    const q = normalizarTexto(SEARCH_STATE[tableName] || '').trim();
+    if (!q) return rows;
+    return rows.filter(r => textGetters.some(getter => normalizarTexto(getter(r)).includes(q)));
+}
+
+function initSearchInput(inputId, tableName, onSearch) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.value = SEARCH_STATE[tableName] || '';
+    input.addEventListener('input', () => {
+        SEARCH_STATE[tableName] = input.value;
+        onSearch();
+    });
+}
+
 function renderCompras() {
     const tbody = document.getElementById('comprasTableBody');
     tbody.innerHTML = '';
     let rows = STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios));
+    rows = applySearch('compras', rows, [
+        c => c.referencia,
+        c => productoNombre(c.producto_id),
+        c => STATE.productos.find(p => p.id === c.producto_id)?.categoria || '',
+        c => c.proveedor,
+        c => (c.compra_socios || []).map(s => socioNombre(s.socio_id)).join(', '),
+    ]);
     rows = applySort('compras', rows, {
         referencia: c => c.referencia,
         fecha: c => c.fecha,
@@ -640,6 +672,12 @@ function renderReservas() {
     const tbody = document.getElementById('reservasTableBody');
     tbody.innerHTML = '';
     let rows = STATE.compras.filter(c => c.estado === 'reservado' && incluyeAlgunSocio(c.compra_socios));
+    rows = applySearch('reservas', rows, [
+        c => c.referencia,
+        c => productoNombre(c.producto_id),
+        c => c.proveedor,
+        c => (c.compra_socios || []).map(s => socioNombre(s.socio_id)).join(', '),
+    ]);
     rows = applySort('reservas', rows, {
         referencia: c => c.referencia,
         fecha: c => c.fecha,
@@ -821,6 +859,13 @@ function renderVentas() {
     const tbody = document.getElementById('ventasTableBody');
     tbody.innerHTML = '';
     let rows = STATE.ventas.filter(v => incluyeAlgunSocio(v.venta_socios));
+    rows = applySearch('ventas', rows, [
+        v => v.referencia,
+        v => productoNombre(v.producto_id),
+        v => v.canal,
+        v => v.comentarios,
+        v => (v.venta_socios || []).map(s => socioNombre(s.socio_id)).join(', '),
+    ]);
     rows = applySort('ventas', rows, {
         referencia: v => v.referencia,
         fecha: v => v.fecha,
@@ -906,6 +951,11 @@ function renderInventario() {
     const tbody = document.getElementById('inventarioTableBody');
     tbody.innerHTML = '';
     let datos = computeInventarioFiltrado().filter(i => i.cantidad_disponible > 0.001);
+    datos = applySearch('inventario', datos, [
+        i => i.producto,
+        i => i.categoria,
+        i => TIPO_LABELS[i.tipo] || i.tipo,
+    ]);
     datos = applySort('inventario', datos, {
         producto: i => i.producto,
         categoria: i => i.categoria,
@@ -1159,6 +1209,12 @@ function renderPagos() {
     const tbody = document.getElementById('pagosTableBody');
     tbody.innerHTML = '';
     let rows = STATE.pagos.filter(p => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(p.pagador_id));
+    rows = applySearch('pagos', rows, [
+        p => p.referencia,
+        p => socioNombre(p.pagador_id),
+        p => p.destinatario_id ? socioNombre(p.destinatario_id) : '',
+        p => p.descripcion,
+    ]);
     rows = applySort('pagos', rows, {
         referencia: p => p.referencia,
         fecha: p => p.fecha,
@@ -1206,6 +1262,7 @@ function renderSocios() {
     const tbody = document.getElementById('sociosTableBody');
     tbody.innerHTML = '';
     let rows = STATE.resumen.filter(r => !FILTRO_SOCIOS.length || FILTRO_SOCIOS.includes(r.socio_id));
+    rows = applySearch('socios', rows, [r => r.socio]);
     rows = applySort('socios', rows, {
         socio: r => r.socio,
         invertido: r => r.invertido,
@@ -1474,6 +1531,15 @@ function renderGraded() {
         const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
         return incluyeAlgunSocio(origen?.compra_socios);
     });
+    rows = applySearch('graded', rows, [
+        g => g.referencia,
+        g => {
+            const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
+            return origen ? productoNombre(origen.producto_id) : '';
+        },
+        g => g.grading_company,
+        g => g.comentarios,
+    ]);
     rows = applySort('graded', rows, {
         referencia: g => g.referencia,
         producto: g => {
@@ -1698,6 +1764,15 @@ function renderRips() {
         const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
         return incluyeAlgunSocio(origen?.compra_socios);
     });
+    rows = applySearch('rips', rows, [
+        r => r.referencia,
+        r => {
+            const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
+            return origen ? productoNombre(origen.producto_id) : '';
+        },
+        r => (r.rip_pulls || []).map(p => productoNombre(p.producto_id)).join(', '),
+        r => r.comentarios,
+    ]);
     rows = applySort('rips', rows, {
         referencia: r => r.referencia,
         fecha: r => r.fecha,
@@ -1756,6 +1831,15 @@ initSortableHeaders('gradedTable', 'graded', renderGraded);
 initSortableHeaders('ripsTable', 'rips', renderRips);
 initSortableHeaders('pagosTable', 'pagos', renderPagos);
 initSortableHeaders('sociosTable', 'socios', renderSocios);
+
+initSearchInput('comprasSearchInput', 'compras', renderCompras);
+initSearchInput('reservasSearchInput', 'reservas', renderReservas);
+initSearchInput('ventasSearchInput', 'ventas', renderVentas);
+initSearchInput('inventarioSearchInput', 'inventario', renderInventario);
+initSearchInput('gradedSearchInput', 'graded', renderGraded);
+initSearchInput('ripsSearchInput', 'rips', renderRips);
+initSearchInput('pagosSearchInput', 'pagos', renderPagos);
+initSearchInput('sociosSearchInput', 'socios', renderSocios);
 
 // ---------- Tema ----------
 document.getElementById('themeToggle').addEventListener('click', () => {

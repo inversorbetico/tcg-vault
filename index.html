@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
     <div id="pinGate" style="position:fixed; inset:0; background:var(--bg-main); z-index:9999; display:flex; align-items:center; justify-content:center;">
@@ -168,7 +168,10 @@
                 <div class="card glass-panel">
                     <div class="card-header">
                         <h3>Compras</h3>
-                        <button class="primary-btn" id="addCompraBtn"><span class="material-symbols-outlined">add</span> Nueva compra</button>
+                        <div class="card-header-actions">
+                            <input type="text" class="search-input" id="comprasSearchInput" placeholder="Buscar...">
+                            <button class="primary-btn" id="addCompraBtn"><span class="material-symbols-outlined">add</span> Nueva compra</button>
+                        </div>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="comprasTable">
@@ -188,7 +191,10 @@
                 <div class="card glass-panel">
                     <div class="card-header">
                         <h3>Reservas / Pedidos (pago parcial)</h3>
-                        <button class="primary-btn" id="addReservaBtn"><span class="material-symbols-outlined">add</span> Nueva reserva</button>
+                        <div class="card-header-actions">
+                            <input type="text" class="search-input" id="reservasSearchInput" placeholder="Buscar...">
+                            <button class="primary-btn" id="addReservaBtn"><span class="material-symbols-outlined">add</span> Nueva reserva</button>
+                        </div>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="reservasTable">
@@ -208,7 +214,10 @@
                 <div class="card glass-panel">
                     <div class="card-header">
                         <h3>Ventas</h3>
-                        <button class="primary-btn" id="addVentaBtn"><span class="material-symbols-outlined">add</span> Nueva venta</button>
+                        <div class="card-header-actions">
+                            <input type="text" class="search-input" id="ventasSearchInput" placeholder="Buscar...">
+                            <button class="primary-btn" id="addVentaBtn"><span class="material-symbols-outlined">add</span> Nueva venta</button>
+                        </div>
                     </div>
                     <div class="quick-stats-row">
                         <div class="stat-item"><span class="label">Margen medio</span><span class="value" id="statVentasMargenMedio">0%</span></div>
@@ -234,7 +243,10 @@
             <!-- Inventario -->
             <div id="inventarioView" class="view-section" style="display:none;">
                 <div class="card glass-panel">
-                    <div class="card-header"><h3>Inventario actual</h3></div>
+                    <div class="card-header">
+                        <h3>Inventario actual</h3>
+                        <input type="text" class="search-input" id="inventarioSearchInput" placeholder="Buscar...">
+                    </div>
                     <div class="quick-stats-row">
                         <div class="stat-item"><span class="label">Valor en stock</span><span class="value" id="statInventarioValorTotal">€0.00</span></div>
                         <div class="mini-chart-card">
@@ -260,7 +272,10 @@
                 <div class="card glass-panel">
                     <div class="card-header">
                         <h3>Envíos a gradear</h3>
-                        <button class="primary-btn" id="addGradingBtn"><span class="material-symbols-outlined">add</span> Nuevo envío</button>
+                        <div class="card-header-actions">
+                            <input type="text" class="search-input" id="gradedSearchInput" placeholder="Buscar...">
+                            <button class="primary-btn" id="addGradingBtn"><span class="material-symbols-outlined">add</span> Nuevo envío</button>
+                        </div>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="gradedTable">
@@ -279,7 +294,10 @@
                 <div class="card glass-panel">
                     <div class="card-header">
                         <h3>Rips (abrir sobres/cajas)</h3>
-                        <button class="primary-btn" id="addRipBtn"><span class="material-symbols-outlined">add</span> Nuevo rip</button>
+                        <div class="card-header-actions">
+                            <input type="text" class="search-input" id="ripsSearchInput" placeholder="Buscar...">
+                            <button class="primary-btn" id="addRipBtn"><span class="material-symbols-outlined">add</span> Nuevo rip</button>
+                        </div>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="ripsTable">
@@ -305,7 +323,10 @@
                 <div class="card glass-panel">
                     <div class="card-header">
                         <h3>Pagos / liquidaciones</h3>
-                        <button class="primary-btn" id="addPagoBtn"><span class="material-symbols-outlined">add</span> Nuevo pago</button>
+                        <div class="card-header-actions">
+                            <input type="text" class="search-input" id="pagosSearchInput" placeholder="Buscar...">
+                            <button class="primary-btn" id="addPagoBtn"><span class="material-symbols-outlined">add</span> Nuevo pago</button>
+                        </div>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="pagosTable">
@@ -319,7 +340,10 @@
             <!-- Resumen por socio -->
             <div id="sociosView" class="view-section" style="display:none;">
                 <div class="card glass-panel">
-                    <div class="card-header"><h3>Resumen por socio</h3></div>
+                    <div class="card-header">
+                        <h3>Resumen por socio</h3>
+                        <input type="text" class="search-input" id="sociosSearchInput" placeholder="Buscar...">
+                    </div>
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="sociosTable">
                         <thead><tr>
@@ -686,7 +710,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=19"></script>
-    <script src="app.js?v=19"></script>
+    <script src="config.js?v=20"></script>
+    <script src="app.js?v=20"></script>
 </body>
 </html>
