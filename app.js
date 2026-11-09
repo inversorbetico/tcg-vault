@@ -116,7 +116,7 @@ function socioOptionsHtml(selected) {
     ).join('');
 }
 
-function addSocioRow(containerId, socioId, porcentaje) {
+function addSocioRow(containerId, socioId, porcentaje, opts = {}) {
     const container = document.getElementById(containerId);
     const row = document.createElement('div');
     row.className = 'form-row socio-row';
@@ -125,7 +125,7 @@ function addSocioRow(containerId, socioId, porcentaje) {
             <select class="socio-select">${socioOptionsHtml(socioId)}</select>
         </div>
         <div class="form-group">
-            <input type="number" class="socio-pct" min="0.01" max="100" step="0.01" value="${porcentaje}">
+            <input type="number" class="socio-pct" min="0.01" max="100" step="0.01" value="${porcentaje}" readonly tabindex="-1">
         </div>
         <button type="button" class="icon-btn remove-socio-row" title="Quitar">
             <span class="material-symbols-outlined">remove_circle</span>
@@ -136,12 +136,42 @@ function addSocioRow(containerId, socioId, porcentaje) {
         onSocioRowsChanged(containerId);
     });
     container.appendChild(row);
-    onSocioRowsChanged(containerId);
+    if (!opts.skipRecalc) onSocioRowsChanged(containerId);
+}
+
+// Reparte el 100% a partes iguales entre las filas de socios; si el reparto no es
+// exacto (p.ej. entre 3), el resto se lo lleva quien paga/vende (o si no hay nadie
+// especificado, el primero de la lista).
+function recalcularPorcentajes(containerId, prioridadSocioId) {
+    const rows = Array.from(document.querySelectorAll(`#${containerId} .socio-row`));
+    const n = rows.length;
+    if (!n) return;
+    const base = Math.floor((100 / n) * 100) / 100;
+    const totalBase = Math.round(base * n * 100) / 100;
+    const resto = Math.round((100 - totalBase) * 100) / 100;
+    const valores = rows.map(() => base);
+    let idx = 0;
+    if (prioridadSocioId != null) {
+        const encontrado = rows.findIndex(r => parseInt(r.querySelector('.socio-select').value, 10) === prioridadSocioId);
+        if (encontrado >= 0) idx = encontrado;
+    }
+    valores[idx] = Math.round((valores[idx] + resto) * 100) / 100;
+    rows.forEach((r, i) => {
+        r.querySelector('.socio-pct').value = valores[i];
+    });
 }
 
 function onSocioRowsChanged(containerId) {
-    if (containerId === 'compraSociosRows') syncPagadoPorVisibility();
-    if (containerId === 'ventaSociosRows') syncVendidoPorVisibility();
+    if (containerId === 'compraSociosRows') {
+        syncPagadoPorVisibility();
+        const pagadoPor = document.getElementById('compraPagadoPorInput').value;
+        recalcularPorcentajes(containerId, pagadoPor ? parseInt(pagadoPor, 10) : null);
+    }
+    if (containerId === 'ventaSociosRows') {
+        syncVendidoPorVisibility();
+        const vendidoPor = document.getElementById('ventaVendidoPorInput').value;
+        recalcularPorcentajes(containerId, vendidoPor ? parseInt(vendidoPor, 10) : null);
+    }
 }
 
 function fillPagadoPorSelect(selected) {
@@ -179,6 +209,13 @@ function syncVendidoPorVisibility() {
         document.getElementById('ventaVendidoPorInput').value = '';
     }
 }
+
+document.getElementById('compraPagadoPorInput').addEventListener('change', (e) => {
+    recalcularPorcentajes('compraSociosRows', e.target.value ? parseInt(e.target.value, 10) : null);
+});
+document.getElementById('ventaVendidoPorInput').addEventListener('change', (e) => {
+    recalcularPorcentajes('ventaSociosRows', e.target.value ? parseInt(e.target.value, 10) : null);
+});
 
 function resetSocioRows(containerId) {
     document.getElementById(containerId).innerHTML = '';
@@ -296,8 +333,9 @@ function openEditCompra(id, clone = false) {
 
     document.getElementById('compraSociosRows').innerHTML = '';
     const socios = c.compra_socios && c.compra_socios.length ? c.compra_socios : [{ socio_id: MI_SOCIO_ID || STATE.socios[0]?.id, porcentaje: 100 }];
-    socios.forEach(s => addSocioRow('compraSociosRows', s.socio_id, s.porcentaje));
+    socios.forEach(s => addSocioRow('compraSociosRows', s.socio_id, s.porcentaje, { skipRecalc: true }));
     document.getElementById('compraPagadoPorInput').value = c.pagado_por || '';
+    syncPagadoPorVisibility();
 
     openModal('compraModal');
 }
@@ -691,8 +729,9 @@ function openEditVenta(id, clone = false) {
 
     document.getElementById('ventaSociosRows').innerHTML = '';
     const socios = v.venta_socios && v.venta_socios.length ? v.venta_socios : [{ socio_id: MI_SOCIO_ID || STATE.socios[0]?.id, porcentaje: 100 }];
-    socios.forEach(s => addSocioRow('ventaSociosRows', s.socio_id, s.porcentaje));
+    socios.forEach(s => addSocioRow('ventaSociosRows', s.socio_id, s.porcentaje, { skipRecalc: true }));
     document.getElementById('ventaVendidoPorInput').value = v.vendido_por || '';
+    syncVendidoPorVisibility();
 
     openModal('ventaModal');
 }

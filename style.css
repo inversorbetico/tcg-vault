@@ -755,6 +755,11 @@ body {
     outline: none;
     border-color: var(--accent-primary);
 }
+.form-group input[readonly] {
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary, var(--bg-main));
+    cursor: not-allowed;
+}
 
 .form-row {
     display: flex;
