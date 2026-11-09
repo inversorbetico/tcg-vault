@@ -121,12 +121,10 @@ function addSocioRow(containerId, socioId, porcentaje, opts = {}) {
     const row = document.createElement('div');
     row.className = 'form-row socio-row';
     row.innerHTML = `
-        <div class="form-group">
+        <div class="form-group" style="flex:1;">
             <select class="socio-select">${socioOptionsHtml(socioId)}</select>
         </div>
-        <div class="form-group">
-            <input type="number" class="socio-pct" min="0.01" max="100" step="0.01" value="${porcentaje}" readonly tabindex="-1">
-        </div>
+        <input type="hidden" class="socio-pct" value="${porcentaje}">
         <button type="button" class="icon-btn remove-socio-row" title="Quitar">
             <span class="material-symbols-outlined">remove_circle</span>
         </button>
@@ -600,7 +598,7 @@ function renderCompras() {
     });
     rows.forEach(c => {
         const socios = (c.compra_socios || [])
-            .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
+            .map(s => socioNombre(s.socio_id)).join(', ');
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${c.referencia}</td>
@@ -646,7 +644,7 @@ function renderReservas() {
     });
     rows.forEach(c => {
         const socios = (c.compra_socios || [])
-            .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
+            .map(s => socioNombre(s.socio_id)).join(', ');
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${c.referencia}</td>
@@ -815,7 +813,7 @@ function renderVentas() {
     });
     rows.forEach(v => {
         const socios = (v.venta_socios || [])
-            .map(s => `${socioNombre(s.socio_id)} (${s.porcentaje}%)`).join(', ');
+            .map(s => socioNombre(s.socio_id)).join(', ');
         const margen = margenVenta(v);
         const tr = document.createElement('tr');
         tr.innerHTML = `
