@@ -283,7 +283,7 @@
                     <div style="overflow-x:auto;">
                     <table class="products-table" id="ripsTable">
                         <thead><tr>
-                            <th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="origen">Caja/sobre abierto</th><th>Cartas obtenidas</th><th></th>
+                            <th data-sort="referencia">Ref.</th><th data-sort="fecha">Fecha</th><th data-sort="origen">Caja/sobre abierto</th><th class="text-right" data-sort="cantidad_abierta">Unidades</th><th>Cartas obtenidas</th><th></th>
                         </tr></thead>
                         <tbody id="ripsTableBody"></tbody>
                     </table>
@@ -606,15 +606,25 @@
                     <label>Caja/sobre a abrir (sellado, de tu inventario)</label>
                     <select id="ripCompraOrigenInput" required></select>
                 </div>
-                <div class="form-group">
-                    <label>Fecha</label>
-                    <input type="date" id="ripFechaInput" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Unidades abiertas</label>
+                        <input type="number" id="ripCantidadInput" min="1" step="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Fecha</label>
+                        <input type="date" id="ripFechaInput" required>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Comentarios</label>
                     <input type="text" id="ripComentariosInput">
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" id="ripAgregarCartasInput" style="width:auto;">
+                    <label for="ripAgregarCartasInput" style="margin:0;">¿Quieres añadir cartas conseguidas?</label>
+                </div>
+                <div class="form-group" id="ripPullsSection" style="display:none;">
                     <label>Cartas obtenidas</label>
                     <div id="ripPullsRows"></div>
                     <button type="button" class="icon-btn" id="ripAddPullBtn" title="Añadir carta">
@@ -668,7 +678,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=14"></script>
-    <script src="app.js?v=14"></script>
+    <script src="config.js?v=15"></script>
+    <script src="app.js?v=15"></script>
 </body>
 </html>

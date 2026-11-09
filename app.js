@@ -530,7 +530,7 @@ function computeInventarioFiltrado() {
         if (!origen) return;
         const share = shareDeSocios(origen.compra_socios);
         if (share <= 0) return;
-        ensure(origen.producto_id, origen.tipo).cantidad_ripeada += share;
+        ensure(origen.producto_id, origen.tipo).cantidad_ripeada += (r.cantidad_abierta || 1) * share;
     });
 
     return Object.values(porClave).map(acc => {
@@ -1383,12 +1383,19 @@ function fillCompraOrigenSelect(selectId, tipo, productoId) {
     sel.innerHTML = candidatas.map(c => `<option value="${c.id}">${compraLabel(c)}</option>`).join('');
 }
 
+function syncRipPullsVisibility() {
+    const marcado = document.getElementById('ripAgregarCartasInput').checked;
+    document.getElementById('ripPullsSection').style.display = marcado ? '' : 'none';
+}
+document.getElementById('ripAgregarCartasInput').addEventListener('change', syncRipPullsVisibility);
+
 function abrirRipDesdeInventario(productoId) {
     document.getElementById('ripForm').reset();
     document.getElementById('ripFechaInput').value = todayStr();
     fillCompraOrigenSelect('ripCompraOrigenInput', 'SEALED', productoId);
     document.getElementById('ripPullsRows').innerHTML = '';
     addPullRow();
+    syncRipPullsVisibility();
     openModal('ripModal');
 }
 
@@ -1607,6 +1614,7 @@ document.getElementById('addRipBtn').addEventListener('click', () => {
     fillCompraOrigenSelect('ripCompraOrigenInput', 'SEALED');
     document.getElementById('ripPullsRows').innerHTML = '';
     addPullRow();
+    syncRipPullsVisibility();
     openModal('ripModal');
 });
 
@@ -1614,12 +1622,14 @@ document.getElementById('ripAddPullBtn').addEventListener('click', () => addPull
 
 document.getElementById('ripForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const pulls = getPullRows();
-    if (!pulls.length) { alert('Añade al menos una carta obtenida.'); return; }
+    const agregarCartas = document.getElementById('ripAgregarCartasInput').checked;
+    const pulls = agregarCartas ? getPullRows() : [];
+    if (agregarCartas && !pulls.length) { alert('Añade al menos una carta obtenida, o desmarca la casilla si no quieres añadir ninguna.'); return; }
 
     const origenId = parseInt(document.getElementById('ripCompraOrigenInput').value, 10);
     const vals = {
         compra_origen_id: origenId,
+        cantidad_abierta: parseFloat(document.getElementById('ripCantidadInput').value) || 1,
         fecha: document.getElementById('ripFechaInput').value,
         comentarios: document.getElementById('ripComentariosInput').value || null,
     };
@@ -1663,6 +1673,7 @@ function renderRips() {
             const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
             return origen ? productoNombre(origen.producto_id) : '';
         },
+        cantidad_abierta: r => r.cantidad_abierta || 1,
     });
     rows.forEach(r => {
         const origen = STATE.compras.find(c => c.id === r.compra_origen_id);
@@ -1673,6 +1684,7 @@ function renderRips() {
             <td>${r.referencia}</td>
             <td>${r.fecha || '-'}</td>
             <td>${origen ? productoNombre(origen.producto_id) : '-'}</td>
+            <td class="text-right">${r.cantidad_abierta || 1}</td>
             <td>${pulls || '-'}</td>
             <td><button class="icon-btn delete-rip" data-id="${r.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button></td>
         `;
