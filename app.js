@@ -1,6 +1,9 @@
-// TCG Vault — conectado a Supabase (sin login, acceso publico segun lo acordado)
+// TCG Vault — conectado a Supabase (sin login real; el PIN se exige también
+// a nivel de base de datos mediante RLS, viajando como cabecera x-app-pin)
 
-const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY);
+const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY, {
+    global: { headers: { 'x-app-pin': window.APP_PIN } },
+});
 
 const TIPO_LABELS = { SEALED: 'Sellado', RAW: 'Suelta', GRADED: 'Gradeada' };
 
