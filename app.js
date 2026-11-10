@@ -642,7 +642,7 @@ function initCategoriaFilter(selectId, tableName, onFilter) {
 function renderCompras() {
     const tbody = document.getElementById('comprasTableBody');
     tbody.innerHTML = '';
-    let rows = STATE.compras.filter(c => c.estado === 'recibido' && incluyeAlgunSocio(c.compra_socios));
+    let rows = STATE.compras.filter(c => c.estado === 'recibido' && c.cantidad > 0.001 && incluyeAlgunSocio(c.compra_socios));
     rows = applyCategoriaFilter('compras', rows, c => productoCategoria(c.producto_id));
     rows = applySearch('compras', rows, [
         c => c.referencia,
@@ -1466,7 +1466,7 @@ function compraLabel(c) {
 
 function fillCompraOrigenSelect(selectId, tipo, productoId) {
     const sel = document.getElementById(selectId);
-    const candidatas = STATE.compras.filter(c => c.estado === 'recibido' && c.tipo === tipo
+    const candidatas = STATE.compras.filter(c => c.estado === 'recibido' && c.tipo === tipo && c.cantidad > 0.001
         && incluyeAlgunSocio(c.compra_socios) && (!productoId || c.producto_id === productoId));
     sel.innerHTML = candidatas.map(c => `<option value="${c.id}">${compraLabel(c)}</option>`).join('');
 }
@@ -1500,8 +1500,33 @@ document.getElementById('gradingCompraOrigenInput').addEventListener('change', s
 
 function abrirGradingDesdeInventario(productoId) {
     document.getElementById('gradingForm').reset();
+    document.getElementById('gradingIdInput').value = '';
+    document.getElementById('gradingModalTitle').textContent = 'Nuevo envío a gradear';
+    document.getElementById('gradingCantidadRow').style.display = '';
     document.getElementById('gradingFechaInput').value = todayStr();
     fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW', productoId);
+    syncGradingCantidadMax();
+    openModal('gradingModal');
+}
+
+function openEditGrading(id) {
+    const g = STATE.gradings.find(x => x.id === parseInt(id, 10));
+    if (!g) return;
+    document.getElementById('gradingForm').reset();
+    document.getElementById('gradingIdInput').value = g.id;
+    document.getElementById('gradingModalTitle').textContent = 'Editar envío a gradear';
+    document.getElementById('gradingCantidadRow').style.display = 'none';
+    fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW');
+    const sel = document.getElementById('gradingCompraOrigenInput');
+    if (![...sel.options].some(o => parseInt(o.value, 10) === g.compra_origen_id)) {
+        const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
+        if (origen) sel.insertAdjacentHTML('afterbegin', `<option value="${origen.id}">${compraLabel(origen)}</option>`);
+    }
+    sel.value = g.compra_origen_id;
+    document.getElementById('gradingEmpresaInput').value = g.grading_company || '';
+    document.getElementById('gradingCosteInput').value = g.coste_grading;
+    document.getElementById('gradingFechaInput').value = g.fecha_envio;
+    document.getElementById('gradingComentariosInput').value = g.comentarios || '';
     syncGradingCantidadMax();
     openModal('gradingModal');
 }
@@ -1528,6 +1553,9 @@ async function copiarRepartoSocios(origenCompraId, nuevaCompraId) {
 
 document.getElementById('addGradingBtn').addEventListener('click', () => {
     document.getElementById('gradingForm').reset();
+    document.getElementById('gradingIdInput').value = '';
+    document.getElementById('gradingModalTitle').textContent = 'Nuevo envío a gradear';
+    document.getElementById('gradingCantidadRow').style.display = '';
     document.getElementById('gradingFechaInput').value = todayStr();
     fillCompraOrigenSelect('gradingCompraOrigenInput', 'RAW');
     syncGradingCantidadMax();
@@ -1536,17 +1564,23 @@ document.getElementById('addGradingBtn').addEventListener('click', () => {
 
 document.getElementById('gradingForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const cantidad = parseInt(document.getElementById('gradingCantidadInput').value, 10) || 1;
+    const gradingId = document.getElementById('gradingIdInput').value;
     const baseVals = {
         compra_origen_id: parseInt(document.getElementById('gradingCompraOrigenInput').value, 10),
         grading_company: document.getElementById('gradingEmpresaInput').value,
         coste_grading: parseFloat(document.getElementById('gradingCosteInput').value),
         fecha_envio: document.getElementById('gradingFechaInput').value,
-        estado: 'enviado',
         comentarios: document.getElementById('gradingComentariosInput').value || null,
     };
-    const { error } = await sb.from('gradings').insert(Array.from({ length: cantidad }, () => ({ ...baseVals })));
-    if (error) { alert('Error: ' + error.message); return; }
+    if (gradingId) {
+        const { error } = await sb.from('gradings').update(baseVals).eq('id', gradingId);
+        if (error) { alert('Error: ' + error.message); return; }
+    } else {
+        const cantidad = parseInt(document.getElementById('gradingCantidadInput').value, 10) || 1;
+        const { error } = await sb.from('gradings').insert(
+            Array.from({ length: cantidad }, () => ({ ...baseVals, estado: 'enviado' })));
+        if (error) { alert('Error: ' + error.message); return; }
+    }
     closeModal('gradingModal');
     await loadAll();
     renderAll();
@@ -1584,6 +1618,7 @@ function renderGraded() {
         estado: g => g.estado,
         grado: g => g.grado,
         fecha_recibido: g => g.fecha_recibido,
+        sobrecoste: g => g.sobrecoste,
     });
     rows.forEach(g => {
         const origen = STATE.compras.find(c => c.id === g.compra_origen_id);
@@ -1599,10 +1634,12 @@ function renderGraded() {
                 : '<span class="pl-badge negative">Enviado</span>'}</td>
             <td class="text-right">${g.grado ?? '-'}</td>
             <td>${g.fecha_recibido || '-'}</td>
+            <td class="text-right">${g.estado === 'recibido' ? formatCurrency(g.sobrecoste || 0) : '-'}</td>
             <td>
                 ${g.estado === 'enviado'
                     ? `<button class="icon-btn mark-grading-recibido" data-id="${g.id}" title="Marcar recibido"><span class="material-symbols-outlined" style="font-size:16px;">inventory_2</span></button>`
                     : ''}
+                <button class="icon-btn edit-grading" data-id="${g.id}" title="Editar"><span class="material-symbols-outlined" style="font-size:16px;">edit</span></button>
                 <button class="icon-btn delete-grading" data-id="${g.id}" title="Eliminar"><span class="material-symbols-outlined" style="font-size:16px;">delete</span></button>
             </td>
         `;
@@ -1615,6 +1652,9 @@ function renderGraded() {
             document.getElementById('gradingFechaRecibidoInput').value = todayStr();
             openModal('gradingRecibidoModal');
         });
+    });
+    tbody.querySelectorAll('.edit-grading').forEach(btn => {
+        btn.addEventListener('click', () => openEditGrading(btn.dataset.id));
     });
     tbody.querySelectorAll('.delete-grading').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1636,6 +1676,7 @@ document.getElementById('gradingRecibidoForm').addEventListener('submit', async 
 
     const grado = parseFloat(document.getElementById('gradingGradoInput').value);
     const fechaRecibido = document.getElementById('gradingFechaRecibidoInput').value;
+    const sobrecoste = parseFloat(document.getElementById('gradingSobrecosteInput').value) || 0;
 
     // 1. Resta 1 unidad de la compra RAW original (ese ejemplar pasa a ser la carta gradeada)
     const { error: errUpd } = await sb.from('compras')
@@ -1643,11 +1684,11 @@ document.getElementById('gradingRecibidoForm').addEventListener('submit', async 
         .eq('id', origen.id);
     if (errUpd) { alert('Error actualizando origen: ' + errUpd.message); return; }
 
-    // 2. Crea la nueva compra GRADED con el coste total (original + grading)
+    // 2. Crea la nueva compra GRADED con el coste total (original + grading + sobrecoste)
     const { data: nueva, error: errIns } = await sb.from('compras').insert({
         producto_id: origen.producto_id,
         cantidad: 1,
-        precio_unitario: origen.precio_unitario + grading.coste_grading,
+        precio_unitario: origen.precio_unitario + grading.coste_grading + sobrecoste,
         tipo: 'GRADED',
         grading_company: grading.grading_company,
         grade: grado,
@@ -1663,7 +1704,7 @@ document.getElementById('gradingRecibidoForm').addEventListener('submit', async 
 
     // 3. Cierra el envio
     const { error: errG } = await sb.from('gradings').update({
-        estado: 'recibido', grado, fecha_recibido: fechaRecibido, compra_resultante_id: nueva.id,
+        estado: 'recibido', grado, fecha_recibido: fechaRecibido, compra_resultante_id: nueva.id, sobrecoste,
     }).eq('id', gradingId);
     if (errG) { alert('Error: ' + errG.message); return; }
 

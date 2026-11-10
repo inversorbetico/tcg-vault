@@ -343,7 +343,7 @@
                     <table class="products-table" id="gradedTable">
                         <thead><tr>
                             <th data-sort="referencia">Ref.</th><th data-sort="producto">Producto</th><th data-sort="empresa">Empresa</th><th class="text-right" data-sort="coste_grading">Coste grading</th>
-                            <th data-sort="fecha_envio">F. envío</th><th data-sort="estado">Estado</th><th class="text-right" data-sort="grado">Grado</th><th data-sort="fecha_recibido">F. recibido</th><th></th>
+                            <th data-sort="fecha_envio">F. envío</th><th data-sort="estado">Estado</th><th class="text-right" data-sort="grado">Grado</th><th data-sort="fecha_recibido">F. recibido</th><th class="text-right" data-sort="sobrecoste">Sobrecoste</th><th></th>
                         </tr></thead>
                         <tbody id="gradedTableBody"></tbody>
                     </table>
@@ -638,17 +638,18 @@
     <div id="gradingModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Nuevo envío a gradear</h3>
+                <h3 id="gradingModalTitle">Nuevo envío a gradear</h3>
                 <button class="close-modal" data-close="gradingModal">&times;</button>
             </div>
             <form id="gradingForm">
+                <input type="hidden" id="gradingIdInput">
                 <div class="form-group">
                     <label>Carta a enviar (de tu inventario, sin gradear)</label>
                     <select id="gradingCompraOrigenInput" required></select>
                     <small style="color:var(--text-secondary);">Si compraste estas cartas en varios lotes (con precios distintos), cada lote aparece por separado y solo puedes enviar hasta las unidades de ese lote. Para enviar más, repite el envío eligiendo otro lote.</small>
                 </div>
                 <div class="form-row">
-                    <div class="form-group">
+                    <div class="form-group" id="gradingCantidadRow">
                         <label>Cantidad de unidades a enviar <span id="gradingCantidadMaxHint" style="font-weight:normal; color:var(--text-secondary);"></span></label>
                         <input type="number" id="gradingCantidadInput" min="1" step="1" value="1" required>
                     </div>
@@ -694,6 +695,11 @@
                         <label>Fecha de recepción</label>
                         <input type="date" id="gradingFechaRecibidoInput" required>
                     </div>
+                </div>
+                <div class="form-group">
+                    <label>Sobrecoste (si ha habido alguno extra al llegar)</label>
+                    <input type="number" id="gradingSobrecosteInput" min="0" step="0.01" value="0">
+                    <small style="color:var(--text-secondary);">Se suma al coste del grading y al coste total de la carta gradeada.</small>
                 </div>
                 <button type="submit" class="submit-btn">Confirmar recepción</button>
             </form>
@@ -784,7 +790,7 @@
 
     <datalist id="productosList"></datalist>
 
-    <script src="config.js?v=21"></script>
-    <script src="app.js?v=21"></script>
+    <script src="config.js?v=22"></script>
+    <script src="app.js?v=22"></script>
 </body>
 </html>
