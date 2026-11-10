@@ -5,7 +5,7 @@ const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_KEY
     global: { headers: { 'x-app-pin': window.APP_PIN } },
 });
 
-const TIPO_LABELS = { SEALED: 'Sellado', RAW: 'Suelta', GRADED: 'Gradeada' };
+const TIPO_LABELS = { SEALED: 'Sellado', RAW: 'Suelta', GRADED: 'Gradeada', PULLED: 'Bulk' };
 
 let STATE = {
     socios: [],
@@ -1342,8 +1342,15 @@ function renderResumen() {
     const valorInventario = inventarioFiltrado.reduce((s, i) => s + (i.valor_disponible || 0), 0);
     const pendientePago = reservasFiltradas.reduce((s, c) => s + (c.pendiente_pagar || 0), 0);
     const valorReservado = reservasFiltradas.reduce((s, c) => s + (c.precio_total || 0), 0);
-    const rentabilidad = totalVendido > 0 ? (beneficio / totalVendido) * 100 : 0;
-    const roi = totalInvertido > 0 ? (beneficio / totalInvertido) * 100 : 0;
+
+    // El bulk/pulled (tipo PULLED) cuenta para el beneficio en €, pero no para la
+    // rentabilidad ni el ROI (distorsionarían el % al salir de un coste ~0).
+    const ventasParaRatio = ventasFiltradas.filter(v => v.tipo !== 'PULLED');
+    const totalVendidoRatio = ventasParaRatio.reduce((s, v) => s + (v.precio_total_venta || 0), 0);
+    const totalCosteVendidoRatio = ventasParaRatio.reduce((s, v) => s + (v.precio_compra_base || 0) * (v.cantidad || 0), 0);
+    const beneficioRatio = totalVendidoRatio - totalCosteVendidoRatio;
+    const rentabilidad = totalVendidoRatio > 0 ? (beneficioRatio / totalVendidoRatio) * 100 : 0;
+    const roi = totalInvertido > 0 ? (beneficioRatio / totalInvertido) * 100 : 0;
 
     document.getElementById('statValorInventario').textContent = formatCurrency(valorInventario);
     document.getElementById('statTotalComprado').textContent = formatCurrency(totalInvertido);
@@ -1423,7 +1430,7 @@ function renderResumen() {
     }
 
     // Grafico por tipo (Sellado / Suelta / Gradeada)
-    const valorPorTipo = { SEALED: 0, RAW: 0, GRADED: 0 };
+    const valorPorTipo = { SEALED: 0, RAW: 0, GRADED: 0, PULLED: 0 };
     inventarioFiltrado.forEach(i => {
         valorPorTipo[i.tipo] = (valorPorTipo[i.tipo] || 0) + (i.valor_disponible || 0);
     });
@@ -1448,7 +1455,7 @@ function renderResumen() {
         if (!totalTipo) {
             tipoBreakdown.innerHTML = '<p style="color:var(--text-secondary); margin:0;">Sin inventario disponible.</p>';
         } else {
-            tipoBreakdown.innerHTML = ['SEALED', 'RAW', 'GRADED'].map(k => {
+            tipoBreakdown.innerHTML = ['SEALED', 'RAW', 'GRADED', 'PULLED'].map(k => {
                 const valor = valorPorTipo[k] || 0;
                 const pct = totalTipo > 0 ? (valor / totalTipo) * 100 : 0;
                 return `
@@ -1744,6 +1751,10 @@ function addPullRow(producto = '', categoria = 'Pokémon', cantidad = 1) {
         <div class="form-group" style="flex:0 0 80px;">
             <input type="number" class="pull-cantidad" min="1" step="1" value="${cantidad}">
         </div>
+        <div class="form-group" style="flex:0 0 auto; display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" class="pull-bulk" style="width:auto;" title="Bulk (coste 0, no afecta a rentabilidad/ROI)">
+            <label style="margin:0; font-weight:normal;">Bulk</label>
+        </div>
         <button type="button" class="icon-btn remove-socio-row" title="Quitar">
             <span class="material-symbols-outlined">remove_circle</span>
         </button>
@@ -1765,6 +1776,7 @@ function getPullRows() {
         nombre: r.querySelector('.pull-producto').value.trim(),
         categoria: r.querySelector('.pull-categoria').value,
         cantidad: parseFloat(r.querySelector('.pull-cantidad').value) || 1,
+        esBulk: r.querySelector('.pull-bulk').checked,
     })).filter(p => p.nombre);
 }
 
@@ -1790,12 +1802,17 @@ document.getElementById('ripForm').addEventListener('submit', async (e) => {
     const origen = STATE.compras.find(c => c.id === origenId);
     const cantidadAbierta = parseFloat(document.getElementById('ripCantidadInput').value) || 1;
     const costeTotalRip = (origen?.precio_unitario || 0) * cantidadAbierta;
-    const totalUnidadesPulls = pulls.reduce((s, p) => s + (p.cantidad || 0), 0);
+
+    // El bulk (sin valor individual) no entra en el reparto de coste: se queda a 0€
+    // y no diluye el coste de las cartas con valor.
+    const pullsNormales = pulls.filter(p => !p.esBulk);
+    const pullsBulk = pulls.filter(p => p.esBulk);
+    const totalUnidadesPulls = pullsNormales.reduce((s, p) => s + (p.cantidad || 0), 0);
 
     if (totalUnidadesPulls < cantidadAbierta) {
         const msg = totalUnidadesPulls === 0
-            ? `No has añadido cartas conseguidas. El coste de lo abierto (${formatCurrency(costeTotalRip)}) no se asignará a ningún producto y desaparecerá del valor de tu stock. ¿Continuar?`
-            : `Has abierto ${cantidadAbierta} unidad(es) pero solo has registrado ${totalUnidadesPulls} carta(s). Todo el coste (${formatCurrency(costeTotalRip)}) se repartirá solo entre las cartas registradas. ¿Continuar?`;
+            ? `No has añadido cartas conseguidas (con valor). El coste de lo abierto (${formatCurrency(costeTotalRip)}) no se asignará a ningún producto y desaparecerá del valor de tu stock. ¿Continuar?`
+            : `Has abierto ${cantidadAbierta} unidad(es) pero solo has registrado ${totalUnidadesPulls} carta(s) con valor. Todo el coste (${formatCurrency(costeTotalRip)}) se repartirá solo entre esas cartas. ¿Continuar?`;
         if (!confirm(msg)) return;
     }
     const costeUnitarioPull = totalUnidadesPulls > 0 ? costeTotalRip / totalUnidadesPulls : 0;
@@ -1809,7 +1826,8 @@ document.getElementById('ripForm').addEventListener('submit', async (e) => {
     const { data: rip, error } = await sb.from('rips').insert(vals).select().single();
     if (error) { alert('Error guardando rip: ' + error.message); return; }
 
-    for (const pull of pulls) {
+    const origenReferencia = STATE.compras.find(c => c.id === origenId)?.referencia || '';
+    for (const pull of pullsNormales) {
         const producto_id = await findOrCreateProducto(pull.nombre, pull.categoria);
         const { data: nuevaCompra, error: errC } = await sb.from('compras').insert({
             producto_id,
@@ -1819,9 +1837,28 @@ document.getElementById('ripForm').addEventListener('submit', async (e) => {
             estado: 'recibido',
             de_rip: true,
             fecha: vals.fecha,
-            comentarios: `Obtenida al abrir ${STATE.compras.find(c => c.id === origenId)?.referencia || ''}`,
+            comentarios: `Obtenida al abrir ${origenReferencia}`,
         }).select().single();
         if (errC) { alert('Error creando carta: ' + errC.message); continue; }
+        await copiarRepartoSocios(origenId, nuevaCompra.id);
+        await sb.from('rip_pulls').insert({
+            rip_id: rip.id, producto_id, cantidad: pull.cantidad, compra_resultante_id: nuevaCompra.id,
+        });
+    }
+
+    for (const pull of pullsBulk) {
+        const producto_id = await findOrCreateProducto(pull.nombre, pull.categoria);
+        const { data: nuevaCompra, error: errC } = await sb.from('compras').insert({
+            producto_id,
+            cantidad: pull.cantidad,
+            precio_unitario: 0,
+            tipo: 'PULLED',
+            estado: 'recibido',
+            de_rip: true,
+            fecha: vals.fecha,
+            comentarios: `Bulk obtenido al abrir ${origenReferencia}`,
+        }).select().single();
+        if (errC) { alert('Error creando bulk: ' + errC.message); continue; }
         await copiarRepartoSocios(origenId, nuevaCompra.id);
         await sb.from('rip_pulls').insert({
             rip_id: rip.id, producto_id, cantidad: pull.cantidad, compra_resultante_id: nuevaCompra.id,

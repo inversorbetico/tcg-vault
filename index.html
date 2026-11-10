@@ -470,6 +470,7 @@
                             <option value="SEALED">Sellado</option>
                             <option value="RAW">Suelta (sin gradear)</option>
                             <option value="GRADED">Gradeada</option>
+                            <option value="PULLED">Bulk (pulled, sin valor individual)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -568,6 +569,7 @@
                         <option value="SEALED">Sellado</option>
                         <option value="RAW">Suelta (sin gradear)</option>
                         <option value="GRADED">Gradeada</option>
+                        <option value="PULLED">Bulk (pulled, sin valor individual)</option>
                     </select>
                 </div>
                 <div class="form-row">
@@ -738,6 +740,7 @@
                 </div>
                 <div class="form-group" id="ripPullsSection" style="display:none;">
                     <label>Cartas obtenidas</label>
+                    <small style="color:var(--text-secondary);">Marca "Bulk" para cartas sin valor individual (coste 0€, no cuentan para la rentabilidad ni el ROI, pero sí para el beneficio cuando las vendas).</small>
                     <div id="ripPullsRows"></div>
                     <button type="button" class="icon-btn" id="ripAddPullBtn" title="Añadir carta">
                         <span class="material-symbols-outlined">add_circle</span> Añadir carta
@@ -791,6 +794,6 @@
     <datalist id="productosList"></datalist>
 
     <script src="config.js?v=23"></script>
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
 </body>
 </html>
